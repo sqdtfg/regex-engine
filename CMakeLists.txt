@@ -64,12 +64,17 @@ target_include_directories(regex_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
 add_executable(regex_engine src/main.c)
 target_link_libraries(regex_engine PRIVATE regex_core)
 
-# 2) regex_test — 独立测试运行器
+# 2) regex_test — 词法分析器测试
 add_executable(regex_test tests/test_tokenizer.c)
 target_include_directories(regex_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(regex_test PRIVATE regex_core)
 
-# 3) regex_bench — 独立基准测试
+# 3) regex_parser_test — 语法解析器测试
+add_executable(regex_parser_test tests/test_parser.c)
+target_include_directories(regex_parser_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(regex_parser_test PRIVATE regex_core)
+
+# 4) regex_bench — 独立基准测试
 add_executable(regex_bench src/benchmark.c)
 target_link_libraries(regex_bench PRIVATE regex_core)
 
@@ -78,7 +83,7 @@ install(TARGETS regex_core
     ARCHIVE DESTINATION lib
     LIBRARY DESTINATION lib
 )
-install(TARGETS regex_engine regex_test regex_bench
+install(TARGETS regex_engine regex_test regex_parser_test regex_bench
     RUNTIME DESTINATION bin
 )
 install(DIRECTORY include/
@@ -89,7 +94,8 @@ install(DIRECTORY include/
 # ---------- 自定义目标：一键测试 ----------
 add_custom_target(run_tests
     COMMAND $<TARGET_FILE:regex_test>
-    DEPENDS regex_test
+    COMMAND $<TARGET_FILE:regex_parser_test>
+    DEPENDS regex_test regex_parser_test
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     COMMENT "Running test suite..."
 )
