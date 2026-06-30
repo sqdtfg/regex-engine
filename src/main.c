@@ -28,8 +28,7 @@ int main(int argc, char *argv[]) {
     }
 
     printf("语法树:\n");
-    ast_dump(root, "", 1);
-
+    ast_print(root);
     printf("\n");
 
     ast_free(root);

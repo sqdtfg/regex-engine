@@ -330,82 +330,49 @@ const char *ast_type_name(ASTNodeType type) {
 }
 
 /* ========================================================================== */
-/*  AST 打印（树形缩进）                                                        */
-/*  示例输出：                                                                  */
-/*    并集                                                                      */
-/*    ├── 普通字符 'a'                                                          */
-/*    └── 星号量词                                                               */
-/*        └── 连接                                                               */
-/*            ├── 普通字符 'b'                                                   */
-/*            └── 普通字符 'c'                                                   */
+/*  AST 二叉树打印（右子树在上 → 根 → 左子树在下）                               */
 /* ========================================================================== */
 
-/** 打印节点附加值（字符、转义类型、量词参数等） */
-static void dump_node_value(const ASTNode *node) {
+static void print_data(const ASTNode *node) {
     switch (node->type) {
-        case AST_CHAR:
-            printf(" '%c'", node->ch);
-            break;
-        case AST_DOT:
-            printf(" .");
-            break;
-        case AST_ESCAPE: {
-            const char *esc_names[] = {"\\d", "\\D", "\\w", "\\W", "\\s", "\\S"};
-            if (node->esc < 6) printf(" %s", esc_names[node->esc]);
-            break;
-        }
-        case AST_BRACKET:
-            printf(" [");
-            for (size_t i = 0; i < node->bracket.len; i++) {
-                putchar(node->bracket.str[i]);
-            }
-            printf("]");
-            break;
+        case AST_CHAR:      printf(" '%c'", node->ch); break;
+        case AST_DOT:       printf(" .");              break;
+        case AST_ESCAPE:    printf(" %s", (const char *[]){"\\d","\\D","\\w","\\W","\\s","\\S"}[node->esc]); break;
+        case AST_BRACKET:   printf(" [%.*s]", (int)node->bracket.len, node->bracket.str); break;
         case AST_CURLY:
-            if (node->quant_max == -1) {
-                printf(" {%d,}", node->quant_min);
-            } else if (node->quant_min == node->quant_max) {
-                printf(" {%d}", node->quant_min);
-            } else {
-                printf(" {%d,%d}", node->quant_min, node->quant_max);
-            }
+            if      (node->quant_max == -1) printf(" {%d,}", node->quant_min);
+            else if (node->quant_min == node->quant_max) printf(" {%d}", node->quant_min);
+            else    printf(" {%d,%d}", node->quant_min, node->quant_max);
             break;
-        default:
-            break;
+        default: break;
     }
 }
 
-void ast_dump(const ASTNode *node, const char *prefix, int is_last) {
+static void print_tree(const ASTNode *node, const char *pfx, int is_left) {
     if (!node) return;
 
-    /* ---- 当前节点的连接线 ---- */
-    printf("%s", prefix);
-    if (is_last) {
-        printf("└── ");
-    } else {
-        printf("├── ");
-    }
+    char next[512];
+    snprintf(next, sizeof(next), "%s%s   ", pfx, is_left ? "│" : " ");
 
-    /* ---- 节点类型 + 附加值 ---- */
-    printf("%s", ast_type_name(node->type));
-    dump_node_value(node);
+    /* 1. 右子树（上方） */
+    print_tree(node->right, next, 0);
+
+    /* 2. 当前节点 */
+    printf("%s%s── %s", pfx, is_left ? "└" : "┌", ast_type_name(node->type));
+    print_data(node);
     printf("\n");
 
-    /* ---- 为子节点准备新的前缀 ---- */
-    char new_prefix[512];
-    snprintf(new_prefix, sizeof(new_prefix), "%s%s",
-             prefix, is_last ? "    " : "│   ");
-
-    /* ---- 处理子节点 ---- */
-    int has_left  = (node->left  != NULL);
-    int has_right = (node->right != NULL);
-
-    if (has_left && has_right) {
-        ast_dump(node->left,  new_prefix, 0);
-        ast_dump(node->right, new_prefix, 1);
-    } else if (has_left) {
-        ast_dump(node->left,  new_prefix, 1);
-    } else if (has_right) {
-        ast_dump(node->right, new_prefix, 1);
-    }
+    /* 3. 左子树（下方） */
+    print_tree(node->left, next, 1);
 }
+
+void ast_print(const ASTNode *root) {
+    if (!root) { printf("(空树)\n"); return; }
+
+    print_tree(root->right, "", 0);
+    printf("%s", ast_type_name(root->type));
+    print_data(root);
+    printf("\n");
+    print_tree(root->left, "", 1);
+}
+

@@ -76,12 +76,7 @@ void ast_free(ASTNode *node);
 /** 将 AST 节点类型转为中文名称（调试用） */
 const char *ast_type_name(ASTNodeType type);
 
-/**
- * 缩进打印整棵 AST 树
- * @param node   根节点
- * @param prefix 行首前缀（调用时传 ""）
- * @param is_last 当前节点是否是其父节点的最后一个子节点（调用时传 1）
- */
-void ast_dump(const ASTNode *node, const char *prefix, int is_last);
+/** 以二叉树形式打印 AST */
+void ast_print(const ASTNode *root);
 
 #endif /* REGEX_PARSER_H */
