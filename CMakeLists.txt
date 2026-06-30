@@ -40,6 +40,11 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY  ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY  ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY  ${CMAKE_BINARY_DIR}/lib)
 
+# Windows: 强制 UTF-8 编码，解决控制台乱码
+if(MINGW OR MSVC)
+    add_compile_definitions(_UNICODE UNICODE)
+endif()
+
 # ---------- 自动收集源文件 ----------
 file(GLOB_RECURSE SOURCES
     "src/*.c"
@@ -60,7 +65,8 @@ add_executable(regex_engine src/main.c)
 target_link_libraries(regex_engine PRIVATE regex_core)
 
 # 2) regex_test — 独立测试运行器
-add_executable(regex_test src/test_runner.c)
+add_executable(regex_test tests/test_tokenizer.c)
+target_include_directories(regex_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(regex_test PRIVATE regex_core)
 
 # 3) regex_bench — 独立基准测试
@@ -82,7 +88,7 @@ install(DIRECTORY include/
 
 # ---------- 自定义目标：一键测试 ----------
 add_custom_target(run_tests
-    COMMAND $<TARGET_FILE:regex_test> --test
+    COMMAND $<TARGET_FILE:regex_test>
     DEPENDS regex_test
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     COMMENT "Running test suite..."
