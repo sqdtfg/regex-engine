@@ -54,13 +54,13 @@ file(GLOB_RECURSE HEADERS
     "include/*.h"
 )
 
-# ---------- 静态库：core（编译 + 匹配核心） ----------
+# ---------- 静态库：core（核心库） ----------
 add_library(regex_core STATIC ${SOURCES})
 target_include_directories(regex_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 # ---------- 可执行程序 ----------
 
-# 1) regex_engine — 主程序（交互式 + 命令行参数）
+# 1) regex_engine — 主程序
 add_executable(regex_engine src/main.c)
 target_link_libraries(regex_engine PRIVATE regex_core)
 
@@ -74,16 +74,12 @@ add_executable(regex_parser_test tests/test_parser.c)
 target_include_directories(regex_parser_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(regex_parser_test PRIVATE regex_core)
 
-# 4) regex_bench — 独立基准测试
-add_executable(regex_bench src/benchmark.c)
-target_link_libraries(regex_bench PRIVATE regex_core)
-
 # ---------- 安装 ----------
 install(TARGETS regex_core
     ARCHIVE DESTINATION lib
     LIBRARY DESTINATION lib
 )
-install(TARGETS regex_engine regex_test regex_parser_test regex_bench
+install(TARGETS regex_engine regex_test regex_parser_test
     RUNTIME DESTINATION bin
 )
 install(DIRECTORY include/
