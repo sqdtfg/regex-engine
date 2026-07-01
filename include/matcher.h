@@ -15,7 +15,27 @@
  * @param input 待匹配的输入字符串
  * @return      匹配结果（matched=1 表示整个输入匹配成功）
  */
+MatchResult dfa_match_full(const DFAMachine *dfa, const char *input);
+
+/**
+ * DFA 子串匹配：查找输入中第一个匹配的子串。
+ *
+ * @param dfa   编译好的 DFA 机器（不可变）
+ * @param input 待匹配的输入字符串
+ * @return      匹配结果（matched=1 表示找到匹配）
+ */
 MatchResult dfa_match(const DFAMachine *dfa, const char *input);
+
+/**
+ * DFA 全局匹配：查找输入中所有匹配的子串。
+ *
+ * @param dfa         编译好的 DFA 机器（不可变）
+ * @param input       待匹配的输入字符串
+ * @param results     匹配结果数组（输出）
+ * @param max_results 结果数组的最大容量
+ * @return            实际匹配到的数量
+ */
+int dfa_match_all(const DFAMachine *dfa, const char *input, MatchResult *results, int max_results);
 
 /**
  * 将 DFA 的状态转移表以人类可读的方式打印到 stdout。
