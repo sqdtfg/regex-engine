@@ -64,7 +64,7 @@ MatchResult dfa_match(const DFAMachine *dfa, const char *input) {
     }
 
     size_t input_len = strlen(input);
-    
+
     for (size_t start = 0; start <= input_len; start++) {
         int current_state = dfa->start_state;
         size_t pos = start;

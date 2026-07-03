@@ -4,6 +4,7 @@
 #endif
 #include "parser.h"
 #include "nfa.h"
+#include "dfa.h"
 
 int main(int argc, char *argv[]) {
 #ifdef _WIN32
@@ -15,10 +16,11 @@ int main(int argc, char *argv[]) {
     const char *pattern = (argc >= 2) ? argv[1] : "a|bc*";
 
     printf("╔══════════════════════════════════════╗\n");
-    printf("║     正则表达式解析示例               ║\n");
+    printf("║     正则表达式引擎演示                ║\n");
     printf("╚══════════════════════════════════════╝\n\n");
     printf("输入: %s\n\n", pattern);
 
+    /* ---- AST ---- */
     Parser parser;
     parser_init(&parser, pattern);
 
@@ -32,14 +34,34 @@ int main(int argc, char *argv[]) {
     ast_print(root);
     printf("\n");
 
+    /* ---- NFA ---- */
     NFAGraph nfa = nfa_from_ast(root);
-    if(!nfa.start){
+    if (!nfa.start) {
         printf("NFA 生成失败\n");
+        ast_free(root);
         return 1;
     }
-    printf("NFA:\n");
     nfa_dump(&nfa);
-    printf("\n");
+
+    // /* ---- DFA ---- */
+    // DFAMachine dfa = dfa_from_nfa(&nfa);
+    // if (dfa.states) {
+    //     dfa_dump(&dfa);
+
+    //     /* 尝试匹配输入字符串 */
+    //     const char *input = (argc >= 3) ? argv[2] : "bc";
+    //     MatchResult r = dfa_match(&dfa, input);
+    //     printf("\n匹配测试: pattern=\"%s\" input=\"%s\"\n", pattern, input);
+    //     if (r.matched) {
+    //         printf("  ✓ 匹配成功! start=%zu end=%zu length=%zu\n",
+    //                r.start, r.end, r.length);
+    //         printf("  匹配内容: \"%.*s\"\n", (int)r.length, input + r.start);
+    //     } else {
+    //         printf("  ✗ 未匹配\n");
+    //     }
+
+    //     dfa_free(&dfa);
+    // }
 
     nfa_free(&nfa);
     ast_free(root);
