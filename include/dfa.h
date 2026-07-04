@@ -53,6 +53,15 @@ DFAMachine dfa_from_nfa(const NFAGraph *nfa);
 void dfa_free(DFAMachine *dfa);
 
 /**
+ * Hopcroft DFA 最小化。
+ * 将 DFA 压缩到最小等价形式（合并等价状态），原地修改原 DFA 机器。
+ * 算法复杂度 O(k n log n)，其中 k = 256（字母表大小），n = 状态数。
+ *
+ * @param dfa  待最小化的 DFA 机器（将原地替换 states 数组）
+ */
+void dfa_minimize(DFAMachine *dfa);
+
+/**
  * 用 DFA 在输入文本上执行匹配。
  * @param dfa     DFA 机器
  * @param input   待匹配的输入字符串

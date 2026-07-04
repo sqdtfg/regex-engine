@@ -43,25 +43,30 @@ int main(int argc, char *argv[]) {
     }
     nfa_dump(&nfa);
 
-    // /* ---- DFA ---- */
-    // DFAMachine dfa = dfa_from_nfa(&nfa);
-    // if (dfa.states) {
-    //     dfa_dump(&dfa);
+    /* ---- DFA ---- */
+    DFAMachine dfa = dfa_from_nfa(&nfa);
+    if (dfa.states) {
+        printf("\n最小化前 DFA 状态数: %d\n", dfa.state_count);
+        dfa_dump(&dfa);
 
-    //     /* 尝试匹配输入字符串 */
-    //     const char *input = (argc >= 3) ? argv[2] : "bc";
-    //     MatchResult r = dfa_match(&dfa, input);
-    //     printf("\n匹配测试: pattern=\"%s\" input=\"%s\"\n", pattern, input);
-    //     if (r.matched) {
-    //         printf("  ✓ 匹配成功! start=%zu end=%zu length=%zu\n",
-    //                r.start, r.end, r.length);
-    //         printf("  匹配内容: \"%.*s\"\n", (int)r.length, input + r.start);
-    //     } else {
-    //         printf("  ✗ 未匹配\n");
-    //     }
+        dfa_minimize(&dfa);
+        printf("\n最小化后 DFA 状态数: %d\n", dfa.state_count);
+        dfa_dump(&dfa);
 
-    //     dfa_free(&dfa);
-    // }
+        /* 尝试匹配输入字符串 */
+        const char *input = (argc >= 3) ? argv[2] : "bc";
+        MatchResult r = dfa_match(&dfa, input);
+        printf("\n匹配测试: pattern=\"%s\" input=\"%s\"\n", pattern, input);
+        if (r.matched) {
+            printf("  ✓ 匹配成功! start=%zu end=%zu length=%zu\n",
+                   r.start, r.end, r.length);
+            printf("  匹配内容: \"%.*s\"\n", (int)r.length, input + r.start);
+        } else {
+            printf("  ✗ 未匹配\n");
+        }
+
+        dfa_free(&dfa);
+    }
 
     nfa_free(&nfa);
     ast_free(root);
