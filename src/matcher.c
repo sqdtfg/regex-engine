@@ -172,17 +172,47 @@ void dfa_dump(const DFAMachine *dfa) {
                state->id,
                state->is_accept ? "(接受)" : "");
 
+        /* 合并连续字符区间输出（与 dfa_dump_dot 逻辑一致） */
+        int targets[256];
+        for (int c = 0; c < 256; c++) {
+            targets[c] = state->transitions[c];
+        }
+
+        int done[256] = {0};
         int has_any = 0;
         for (int c = 0; c < 256; c++) {
-            if (state->transitions[c] != -1) {
-                if (!has_any) {
-                    printf("  转移: ");
-                    has_any = 1;
-                }
-                printf("[%c(0x%02x)->%d] ",
-                       (c >= 32 && c < 127) ? c : '.',
-                       c,
-                       state->transitions[c]);
+            int t = targets[c];
+            if (t == -1 || done[c]) continue;
+
+            int hi = c;
+            while (hi + 1 < 256 && targets[hi + 1] == t && !done[hi + 1]) {
+                hi++;
+            }
+            for (int j = c; j <= hi; j++) done[j] = 1;
+
+            if (!has_any) {
+                printf("  转移: ");
+                has_any = 1;
+            }
+
+            if (c == hi) {
+                /* 单字符 */
+                if (c >= 32 && c < 127)
+                    printf("'%c'->%d ", c, t);
+                else
+                    printf("0x%02x->%d ", c, t);
+            } else if (c + 1 == hi) {
+                /* 两个字符 */
+                if (c >= 32 && c < 127 && hi >= 32 && hi < 127)
+                    printf("'%c','%c'->%d ", c, hi, t);
+                else
+                    printf("0x%02x,0x%02x->%d ", c, hi, t);
+            } else {
+                /* 区间 */
+                if (c >= 32 && c < 127 && hi >= 32 && hi < 127)
+                    printf("'%c'-'%c'->%d ", c, hi, t);
+                else
+                    printf("0x%02x-0x%02x->%d ", c, hi, t);
             }
         }
         if (has_any) {
