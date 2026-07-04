@@ -124,7 +124,6 @@ void dfa_dump_dot(const DFAMachine *dfa, FILE *fp);
 
 /**
  * 将 DFA 状态转移表输出为 Graphviz DOT 文件。
- * 等价于 dfa_dump_dot(dfa, fp)，但接受文件路径。
  *
  * @param dfa       DFA 机器
  * @param filepath  输出文件路径（如 "DOT/dfa_min.dot"）
