@@ -84,12 +84,17 @@ add_executable(regex_dfa_test tests/test_dfa.c)
 target_include_directories(regex_dfa_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(regex_dfa_test PRIVATE regex_core)
 
+# 6) regex_hopcroft_test — Hopcroft DFA 最小化测试
+add_executable(regex_hopcroft_test tests/test_hopcroft.c)
+target_include_directories(regex_hopcroft_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(regex_hopcroft_test PRIVATE regex_core)
+
 # ---------- 安装 ----------
 install(TARGETS regex_core
     ARCHIVE DESTINATION lib
     LIBRARY DESTINATION lib
 )
-install(TARGETS regex_engine regex_tokenizer_test regex_parser_test regex_nfa_test regex_dfa_test
+install(TARGETS regex_engine regex_tokenizer_test regex_parser_test regex_nfa_test regex_dfa_test regex_hopcroft_test
     RUNTIME DESTINATION bin
 )
 install(DIRECTORY include/
@@ -103,7 +108,8 @@ add_custom_target(run_tests
     COMMAND $<TARGET_FILE:regex_parser_test>
     COMMAND $<TARGET_FILE:regex_nfa_test>
     COMMAND $<TARGET_FILE:regex_dfa_test>
-    DEPENDS regex_tokenizer_test regex_parser_test regex_nfa_test regex_dfa_test
+    COMMAND $<TARGET_FILE:regex_hopcroft_test>
+    DEPENDS regex_tokenizer_test regex_parser_test regex_nfa_test regex_dfa_test regex_hopcroft_test
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     COMMENT "Running test suite..."
 )
