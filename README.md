@@ -1,4 +1,4 @@
-# Regex Engine — 正则表达式引擎
+﻿# Regex Engine — 正则表达式引擎
 
 Thompson 构造 + 子集构造 + Hopcroft 最小化的 C11 正则引擎，支持 NFA/DFA 双模式匹配。
 
