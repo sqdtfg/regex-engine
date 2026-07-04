@@ -1,6 +1,7 @@
 #ifndef REGEX_MATCHER_H
 #define REGEX_MATCHER_H
 
+#include <stdio.h>
 #include "dfa.h"
 
 /* ========================================================================== */
@@ -44,5 +45,20 @@ int dfa_match_all(const DFAMachine *dfa, const char *input, MatchResult *results
  * @param dfa  DFA 机器（可为 NULL）
  */
 void dfa_dump(const DFAMachine *dfa);
+
+/**
+ * 将 DFA 的状态转移表输出为 Graphviz DOT 格式（可视化调试用）。
+ *
+ * 输出规约：
+ * - 有向图 digraph DFA { rankdir=LR; ... }
+ * - 接受状态：双圈 (shape=doublecircle)，普通状态：圆圈 (shape=circle)
+ * - 起始状态由不可见节点 (shape=point) 的边标记
+ * - 边标签合并连续字符为区间，避免 256 条边输出爆炸
+ * - -1 转移不画边
+ *
+ * @param dfa  DFA 机器（可为 NULL）
+ * @param fp   输出文件（可为 stdout）
+ */
+void dfa_dump_dot(const DFAMachine *dfa, FILE *fp);
 
 #endif /* REGEX_MATCHER_H */

@@ -1,6 +1,7 @@
 #ifndef REGEX_NFA_H
 #define REGEX_NFA_H
 
+#include <stdio.h>
 #include "parser.h"
 
 /* ========================================================================== */
@@ -81,5 +82,11 @@ void nfa_free(NFAGraph *nfa);
 
 /** 打印 NFA 图（调试用，输出状态和转移关系） */
 void nfa_dump(const NFAGraph *nfa);
+
+/** 将 NFA 图输出为 Graphviz DOT 格式（可视化调试用） */
+void nfa_dump_dot(const NFAGraph *nfa, FILE *fp);
+
+/** 将 NFA 图输出为 Graphviz DOT 文件 */
+int nfa_dump_dot_file(const NFAGraph *nfa, const char *filepath);
 
 #endif /* REGEX_NFA_H */

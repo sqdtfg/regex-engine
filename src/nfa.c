@@ -518,3 +518,147 @@ void nfa_dump(const NFAGraph *nfa) {
 
     printf("==========================\n");
 }
+
+/* ========================================================================== */
+/*  nfa_dump_dot — Graphviz DOT 输出                                           */
+/* ========================================================================== */
+
+/**
+ * 将 NFA 图以 Graphviz DOT 格式输出到指定文件。
+ *
+ * 输出规约：
+ * - 有向图 rankdir=LR（从左到右）
+ * - 普通状态：圆圈 (shape=circle)
+ * - 接受状态（end）：双圈 (shape=doublecircle)
+ * - 起始状态：不可见节点 (shape=point)，用一条入边指向 NFA 的 start 状态
+ * - ε 边：红色虚线，标签 "ε"
+ * - 普通匹配边：实线，标签描述匹配条件
+ *
+ * 用法：将输出粘贴到 https://viz-js.com 或 VS Code Graphviz 扩展可直接查看。
+ *
+ * @param nfa  NFA 图
+ * @param fp   输出文件（可为 stdout）
+ */
+void nfa_dump_dot(const NFAGraph *nfa, FILE *fp) {
+    if (!nfa || !nfa->states) {
+        fprintf(fp, "// (null NFA)\n");
+        return;
+    }
+
+    fprintf(fp, "digraph NFA {\n");
+    fprintf(fp, "    rankdir=LR;\n");
+    fprintf(fp, "    node [shape=circle];\n\n");
+
+    /* 不可见起始节点 */
+    fprintf(fp, "    start [shape=point];\n");
+
+    /* 输出每个状态 */
+    for (int i = 0; i < nfa->state_count; i++) {
+        NFAState *s = nfa->states[i];
+        if (!s) continue;
+
+        const char *shape = (s == nfa->end) ? "doublecircle" : "circle";
+        fprintf(fp, "    S%d [shape=%s, label=\"%d\"];\n",
+                s->id, shape, s->id);
+    }
+
+    fprintf(fp, "\n    /* start edge */\n");
+    if (nfa->start) {
+        fprintf(fp, "    start -> S%d;\n", nfa->start->id);
+    }
+
+    /* 输出所有出边 */
+    fprintf(fp, "\n    /* transition edges */\n");
+    for (int i = 0; i < nfa->state_count; i++) {
+        NFAState *s = nfa->states[i];
+        if (!s) continue;
+
+        /* edge1 */
+        if (s->edge1_next) {
+            const char *style = "";
+            const char *label = "";
+            switch (s->edge1_type) {
+            case NFA_EDGE_EPSILON:
+                style = "style=dashed, color=red, ";
+                label = "ε";
+                break;
+            case NFA_EDGE_CHAR: {
+                static char buf[8];
+                if (s->edge1_char == '"')  snprintf(buf, sizeof(buf), "\\\"");
+                else if (s->edge1_char == '\\') snprintf(buf, sizeof(buf), "\\\\");
+                else snprintf(buf, sizeof(buf), "%c", s->edge1_char);
+                label = buf;
+                break;
+            }
+            case NFA_EDGE_DOT:
+                label = ".";
+                break;
+            case NFA_EDGE_ESCAPE: {
+                static const char *names[] = {"\\\\d","\\\\D","\\\\w","\\\\W","\\\\s","\\\\S"};
+                label = names[s->edge1_esc];
+                break;
+            }
+            case NFA_EDGE_BRACKET: {
+                static char buf[128];
+                snprintf(buf, sizeof(buf), "[%.*s]",
+                         (int)s->edge1_bracket.len,
+                         s->edge1_bracket.str ? s->edge1_bracket.str : "");
+                label = buf;
+                break;
+            }
+            default: label = "?";
+            }
+            fprintf(fp, "    S%d -> S%d [%slabel=\"%s\"];\n",
+                    s->id, s->edge1_next->id, style, label);
+        }
+
+        /* edge2 */
+        if (s->edge2_next) {
+            const char *style = "";
+            const char *label = "";
+            switch (s->edge2_type) {
+            case NFA_EDGE_EPSILON:
+                style = "style=dashed, color=red, ";
+                label = "ε";
+                break;
+            case NFA_EDGE_CHAR: {
+                static char buf[8];
+                if (s->edge2_char == '"')  snprintf(buf, sizeof(buf), "\\\"");
+                else if (s->edge2_char == '\\') snprintf(buf, sizeof(buf), "\\\\");
+                else snprintf(buf, sizeof(buf), "%c", s->edge2_char);
+                label = buf;
+                break;
+            }
+            case NFA_EDGE_DOT:
+                label = ".";
+                break;
+            case NFA_EDGE_ESCAPE: {
+                static const char *names[] = {"\\\\d","\\\\D","\\\\w","\\\\W","\\\\s","\\\\S"};
+                label = names[s->edge2_esc];
+                break;
+            }
+            case NFA_EDGE_BRACKET: {
+                static char buf[128];
+                snprintf(buf, sizeof(buf), "[%.*s]",
+                         (int)s->edge2_bracket.len,
+                         s->edge2_bracket.str ? s->edge2_bracket.str : "");
+                label = buf;
+                break;
+            }
+            default: label = "?";
+            }
+            fprintf(fp, "    S%d -> S%d [%slabel=\"%s\"];\n",
+                    s->id, s->edge2_next->id, style, label);
+        }
+    }
+
+    fprintf(fp, "}\n");
+}
+
+int nfa_dump_dot_file(const NFAGraph *nfa, const char *filepath) {
+    FILE *fp = fopen(filepath, "w");
+    if (!fp) return -1;
+    nfa_dump_dot(nfa, fp);
+    fclose(fp);
+    return 0;
+}

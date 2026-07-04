@@ -1,6 +1,7 @@
 #ifndef REGEX_DFA_H
 #define REGEX_DFA_H
 
+#include <stdio.h>
 #include "nfa.h"
 
 /* ========================================================================== */
@@ -104,5 +105,31 @@ MatchResult dfa_match(const DFAMachine *dfa, const char *input);
  * 接受 NULL 参数（输出 "(null DFA)"）。
  */
 void dfa_dump(const DFAMachine *dfa);
+
+/**
+ * 将 DFA 的状态转移表输出为 Graphviz DOT 格式（可视化调试用）。
+ *
+ * 输出规约：
+ * - 有向图 digraph DFA { rankdir=LR; ... }
+ * - 接受状态：双圈 (shape=doublecircle)，普通状态：圆圈 (shape=circle)
+ * - 起始状态由不可见节点 (shape=point) 的边标记
+ * - 边标签合并连续字符为区间（如 "a-c"、"0-9"），避免 256 条独立边的输出爆炸
+ * - -1 转移不画边
+ * - 接受 NULL 参数或空机器（输出空图）
+ *
+ * @param dfa  DFA 机器
+ * @param fp   输出文件（可为 stdout）
+ */
+void dfa_dump_dot(const DFAMachine *dfa, FILE *fp);
+
+/**
+ * 将 DFA 状态转移表输出为 Graphviz DOT 文件。
+ * 等价于 dfa_dump_dot(dfa, fp)，但接受文件路径。
+ *
+ * @param dfa       DFA 机器
+ * @param filepath  输出文件路径（如 "DOT/dfa_min.dot"）
+ * @return          0 = 成功, -1 = 打开文件失败
+ */
+int dfa_dump_dot_file(const DFAMachine *dfa, const char *filepath);
 
 #endif /* REGEX_DFA_H */
