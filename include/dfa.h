@@ -101,6 +101,7 @@ MatchResult dfa_match(const DFAMachine *dfa, const char *input);
  * 打印 DFA 的状态转移表（调试用）。
  * 仅输出有意义的转移（next_id != -1），可打印字符直接显示，
  * 不可打印字符以十六进制（0x%02x）表示。
+ * 接受 NULL 参数（输出 "(null DFA)"）。
  */
 void dfa_dump(const DFAMachine *dfa);
 
