@@ -10,6 +10,14 @@
 /**
  * 每个 DFA 状态对应 NFA 的一个状态集合（子集）。
  * transitions[] 覆盖 256 个字节值，-1 表示该输入没有转移。
+ *
+ * 设计说明：
+ * - 每个 DFA 状态持有一张完整的 256 入口转移表（查表 O(1)），
+ *   这是 DFA 匹配 O(n) 的保证（n = 输入长度）。
+ * - 存储上用 flat 动态数组而非链表，构造阶段按 BFS 顺序增长，
+ *   最终产出的 DFAMachine 可直接用于匹配，无需额外步骤。
+ * - 字母表固定在单字节（0..255），不直接支持 Unicode；
+ *   UTF-8 输入会按字节拆开匹配，对大部分 ASCII 模式仍有正确语义。
  */
 typedef struct DFAState {
     int id;                     /* 状态编号 */
@@ -44,12 +52,31 @@ typedef struct {
 
 /**
  * 子集构造法：从 NFA 构建 DFA。
- * @param nfa     完整的 NFA 图
+ *
+ * 这是 NFA→DFA 转换的核心入口，实现了编译原理中经典的
+ * 子集构造算法（Subset Construction Algorithm）。
+ *
+ * 算法步骤：
+ *   1. 计算 ε-closure({nfa.start}) → DFA 状态 0
+ *   2. BFS 遍历所有 DFA 状态，对当前状态 S 和每个字符 c∈[0,255]：
+ *      a. move(S, c)  → 从 S 中任意 NFA 状态沿匹配 c 的边走一步
+ *      b. ε-closure(move(S, c)) → 目标 DFA 状态
+ *      c. 若目标状态是新的，追加到 DFA 状态数组末尾
+ *      d. 记录 S --c--> target
+ *   3. 若 DFA 状态中包含 NFA 的 accept 状态，则该 DFA 状态也是 accept
+ *
+ * 实现细节：
+ * - 新状态总是追加到 dfa_states[] 末尾，线性遍历即可完成 BFS，
+ *   无需单独的队列数据结构。
+ * - DFA 状态去重通过比较底层 BoolSet（memcmp）完成，正确性依赖于
+ *   ε-closure 的确定性（同一个输入集合总是展开成同一个闭包）。
+ *
+ * @param nfa     完整的 NFA 图（Thompson 构造产物，允许 ε 边）
  * @return        确定化的 DFA 机器。调用者负责调用 dfa_free() 释放。
  */
 DFAMachine dfa_from_nfa(const NFAGraph *nfa);
 
-/** 释放 DFA 机器 */
+/** 释放 DFA 机器（states 数组及每个状态的 transitions 数组） */
 void dfa_free(DFAMachine *dfa);
 
 /**
