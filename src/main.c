@@ -5,6 +5,7 @@
 #include "parser.h"
 #include "nfa.h"
 #include "dfa.h"
+#include "hopcroft.h"
 
 int main(int argc, char *argv[]) {
 #ifdef _WIN32
