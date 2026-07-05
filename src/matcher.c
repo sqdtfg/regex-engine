@@ -1,6 +1,7 @@
 #include "matcher.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 /* ========================================================================== */
 /*  DFA 匹配器实现                                                              */
@@ -11,42 +12,8 @@
 /* ========================================================================== */
 
 /* ========================================================================== */
-/*  内部辅助：DOT 标签生成                                                     */
+/*  内部辅助：字符区间标签生成（文本/DOT 共用）                                 */
 /* ========================================================================== */
-
-/**
- * 将单个字符转为 DOT 标签安全的文本。
- * 双缓冲区支持同语句内多次调用。
- *
- * 处理规则：
- * - 控制字符 → 转义序列 (\n, \r, \t)
- * - 可打印 ASCII → 原字符（自动转义 \ 和 "）
- * - 扩展 ASCII → 十六进制 0xx
- */
-static const char *char_dot_label(int c) {
-    static char buf[2][16];
-    static int  idx = 0;
-    char *b = buf[idx];
-    idx = (idx + 1) % 2;
-
-    switch (c) {
-    case '\n': return "\\n";
-    case '\r': return "\\r";
-    case '\t': return "\\t";
-    case ' ':  return "SP";
-    case '\\': return "\\\\";
-    case '"':  return "\\\"";
-    }
-
-    if (c >= 32 && c <= 126) {
-        b[0] = (char)c;
-        b[1] = '\0';
-        return b;
-    }
-
-    snprintf(b, 16, "0x%02x", (unsigned char)c);
-    return b;
-}
 
 /**
  * 判断一组字符转移是否匹配某个语义类别（转义序列）。
@@ -309,6 +276,255 @@ int dfa_match_all(const DFAMachine *dfa, const char *input, MatchResult *results
 }
 
 /* ========================================================================== */
+/*  内部辅助：字符区间标签生成（文本/DOT 共用）                                 */
+/* ========================================================================== */
+
+/**
+ * 将字符区间 [lo..hi] 转为人类可读标签。
+ * 可打印 ASCII → 使用 'a'-'z' 格式
+ * 控制字符 → 使用十六进制 0xNN
+ * DOT 格式：可打印字符用原字符，不可打印用 0xNN
+ */
+static void format_range_label(FILE *fp, int lo, int hi, int is_dot) {
+    if (is_dot) {
+        if (lo == hi) {
+            /* 单字符：可打印用原字符，不可打印用 0xNN */
+            if (lo >= 32 && lo <= 126) {
+                /* 转义 DOT 特殊字符 */
+                if (lo == '"') fputs("\\\"", fp);
+                else if (lo == '\\') fputs("\\\\", fp);
+                else fputc(lo, fp);
+            } else {
+                char buf[8];
+                snprintf(buf, sizeof(buf), "0x%02x", lo);
+                fputs(buf, fp);
+            }
+        } else {
+            /* 区间：两端都可打印 → 'a-z' 格式 */
+            if (lo >= 32 && lo <= 126 && hi >= 32 && hi <= 126) {
+                fputc(lo, fp);
+                fputc('-', fp);
+                fputc(hi, fp);
+            } else {
+                /* 跨可打印/不可打印边界 → 两端都用 0xNN 保持一致 */
+                char buf_lo[8], buf_hi[8];
+                snprintf(buf_lo, sizeof(buf_lo), "0x%02x", lo);
+                snprintf(buf_hi, sizeof(buf_hi), "0x%02x", hi);
+                fputs(buf_lo, fp);
+                fputc('-', fp);
+                fputs(buf_hi, fp);
+            }
+        }
+        return;
+    }
+
+    /* 文本格式（dfa_dump） */
+    if (lo == hi) {
+        if (lo >= 32 && lo < 127)
+            printf("'%c'", lo);
+        else
+            printf("0x%02x", lo);
+    } else if (lo + 1 == hi) {
+        if (lo >= 32 && lo < 127 && hi >= 32 && hi < 127)
+            printf("'%c','%c'", lo, hi);
+        else
+            printf("0x%02x,0x%02x", lo, hi);
+    } else {
+        if (lo >= 32 && lo < 127 && hi >= 32 && hi < 127)
+            printf("'%c'-'%c'", lo, hi);
+        else
+            printf("0x%02x-0x%02x", lo, hi);
+    }
+}
+
+/**
+ * 收集所有转移到 target 的字符为一个位掩码数组（256 bits）。
+ * 返回分配的掩码指针（调用者 free），若 target 不存在则返回 NULL。
+ */
+static unsigned char *collect_target_bytes(const int *transitions, int target) {
+    unsigned char *mask = calloc(32, 1);  /* 256 bits = 32 bytes */
+    if (!mask) return NULL;
+    for (int c = 0; c < 256; c++) {
+        if (transitions[c] == target) {
+            mask[c >> 3] |= (1 << (c & 7));
+        }
+    }
+    return mask;
+}
+
+/**
+ * 尝试将一组非语义化的转移识别为字符集合模式（如 [abc]、[^abc]、[a-z]）。
+ * 返回语义化标签（静态缓冲区），无法识别则返回 NULL。
+ *
+ * 识别策略（启发式，按优先级从高到低）：
+ *   1. 精确匹配常见范围（a-z、A-Z、0-9）
+ *   2. 精确匹配小集合（≤ 5 个离散可打印字符 → [abcde]）
+ *   3. 精确匹配小补集（≤ 5 个离散可打印字符排除 → [^abcde]）
+ *   4. 连续区间 → 用 'a'-'z' 格式
+ *   5. 多区间但 ≤ 3 个 → 尝试用补集描述
+ *   6. 兜底：逗号分隔各区间
+ */
+static const char *complex_class_label(const int *transitions, int target) {
+    static char buf[128];
+
+    /* ---- 策略 1：精确匹配常见范围（a-z、A-Z、0-9） ---- */
+    {
+        /* a-z (0x61-0x7A) */
+        {
+            int match = 1;
+            for (int c = 0; c < 256; c++) {
+                int expected = ((c >= 0x61 && c <= 0x7A) ? target : -1);
+                if (transitions[c] != expected) { match = 0; break; }
+            }
+            if (match) return "a-z";
+        }
+        /* A-Z (0x41-0x5A) */
+        {
+            int match = 1;
+            for (int c = 0; c < 256; c++) {
+                int expected = ((c >= 0x41 && c <= 0x5A) ? target : -1);
+                if (transitions[c] != expected) { match = 0; break; }
+            }
+            if (match) return "A-Z";
+        }
+        /* 0-9 (0x30-0x39) */
+        {
+            int match = 1;
+            for (int c = 0; c < 256; c++) {
+                int expected = ((c >= 0x30 && c <= 0x39) ? target : -1);
+                if (transitions[c] != expected) { match = 0; break; }
+            }
+            if (match) return "0-9";
+        }
+    }
+
+    /* 收集目标字节位掩码 */
+    unsigned char *mask = collect_target_bytes(transitions, target);
+    if (!mask) return NULL;
+
+    /* ---- 提取区间列表 ---- */
+    int intervals[128];  /* 每两项为一对 [start, end] */
+    int interval_count = 0;
+    int in_range = 0;
+    int range_start = 0;
+
+    for (int c = 0; c < 256; c++) {
+        int is_target = (mask[c >> 3] & (1 << (c & 7)));
+        if (is_target && !in_range) {
+            in_range = 1;
+            range_start = c;
+        } else if (!is_target && in_range) {
+            intervals[interval_count * 2] = range_start;
+            intervals[interval_count * 2 + 1] = c - 1;
+            interval_count++;
+            in_range = 0;
+        }
+    }
+    if (in_range) {
+        intervals[interval_count * 2] = range_start;
+        intervals[interval_count * 2 + 1] = 255;
+        interval_count++;
+    }
+
+    free(mask);
+
+    if (interval_count == 0) return NULL;
+
+    /* ---- 策略 2：小集合（≤ 5 个离散可打印字符）→ [abcde] ---- */
+    if (interval_count <= 5) {
+        int printable_only = 1;
+        int char_count = 0;
+        int pos = 0;
+        for (int i = 0; i < interval_count && pos < 120; i++) {
+            int lo = intervals[i * 2], hi = intervals[i * 2 + 1];
+            if (lo < 32 || lo > 126 || hi < 32 || hi > 126) {
+                printable_only = 0;
+                break;
+            }
+            for (int c = lo; c <= hi && pos < 120; c++) {
+                buf[pos++] = (char)c;
+                char_count++;
+            }
+        }
+        if (printable_only && char_count > 0 && char_count <= 5) {
+            buf[pos] = '\0';
+            char tmp[16];
+            snprintf(tmp, sizeof(tmp), "%.*s", (int)pos, buf);
+            snprintf(buf, sizeof(buf), "[%s]", tmp);
+            return buf;
+        }
+    }
+
+    /* ---- 策略 3：≤ 3 个区间 → 尝试补集描述 ---- */
+    if (interval_count <= 3) {
+        /* 检查是否所有非目标字节都是 -1（死状态）或可打印 */
+        int all_non_target_is_dead_or_printable = 1;
+        int excl_char_count = 0;
+        int excl_pos = 0;
+        char excl_chars[16] = {0};
+
+        for (int c = 0; c < 256; c++) {
+            if (transitions[c] != target && transitions[c] != -1) {
+                all_non_target_is_dead_or_printable = 0;
+                break;
+            }
+            if (transitions[c] == target) continue;
+            if (c >= 32 && c <= 126 && excl_pos < 15) {
+                excl_chars[excl_pos++] = (char)c;
+                excl_char_count++;
+            }
+        }
+
+        if (all_non_target_is_dead_or_printable && excl_char_count > 0 && excl_char_count <= 5) {
+            excl_chars[excl_pos] = '\0';
+            snprintf(buf, sizeof(buf), "[^%s]", excl_chars);
+            return buf;
+        }
+    }
+
+    /* ---- 策略 4：单个连续区间 → 'a-z' 格式 ---- */
+    if (interval_count == 1) {
+        int lo = intervals[0], hi = intervals[1];
+        if (lo >= 32 && lo <= 126 && hi >= 32 && hi <= 126) {
+            snprintf(buf, sizeof(buf), "%c-%c", lo, hi);
+            return buf;
+        }
+        /* 跨边界的单区间 → 用 hex 格式 */
+        snprintf(buf, sizeof(buf), "0x%02x-0x%02x", lo, hi);
+        return buf;
+    }
+
+    /* ---- 策略 5：多区间 → 逗号分隔 ---- */
+    if (interval_count <= 10) {
+        int pos = 0;
+        for (int i = 0; i < interval_count && pos < 120; i++) {
+            int lo = intervals[i * 2], hi = intervals[i * 2 + 1];
+            if (i > 0) {
+                if (pos < 127) buf[pos++] = ',';
+            }
+            if (lo == hi) {
+                if (lo >= 32 && lo <= 126) {
+                    buf[pos++] = (char)lo;
+                } else {
+                    pos += snprintf(buf + pos, 127 - pos, "0x%02x", lo);
+                }
+            } else if (lo >= 32 && lo <= 126 && hi >= 32 && hi <= 126) {
+                buf[pos++] = (char)lo;
+                buf[pos++] = '-';
+                buf[pos++] = (char)hi;
+            } else {
+                pos += snprintf(buf + pos, 127 - pos, "0x%02x-0x%02x", lo, hi);
+            }
+        }
+        buf[pos] = '\0';
+        return buf;
+    }
+
+    /* ---- 兜底：无法语义化，返回 NULL ---- */
+    return NULL;
+}
+
+/* ========================================================================== */
 /*  dfa_dump — 打印 DFA 状态转移表（调试用）                                   */
 /* ========================================================================== */
 
@@ -343,7 +559,33 @@ void dfa_dump(const DFAMachine *dfa) {
             if (t == -1 || t_done[t]) continue;
             t_done[t] = 1;
 
-            /* 收集所有转移到 t 的连续区间 */
+            /* 先尝试语义化识别整个转移（如 .、\d、\w 等） */
+            const char *semantic = semantic_range_label(targets, t);
+            if (semantic) {
+                if (!has_any) {
+                    printf("  转移: ");
+                    has_any = 1;
+                } else {
+                    printf("        ");
+                }
+                printf("%s->%d\n", semantic, t);
+                continue;
+            }
+
+            /* 再尝试字符集合语义化（如 [abc]、[^abc]、a-z） */
+            const char *complex = complex_class_label(targets, t);
+            if (complex) {
+                if (!has_any) {
+                    printf("  转移: ");
+                    has_any = 1;
+                } else {
+                    printf("        ");
+                }
+                printf("%s->%d\n", complex, t);
+                continue;
+            }
+
+            /* 否则：收集所有转移到 t 的连续区间 */
             int done_char[256] = {0};
             for (int c2 = 0; c2 < 256; c2++) {
                 if (targets[c2] != t || done_char[c2]) continue;
@@ -361,25 +603,8 @@ void dfa_dump(const DFAMachine *dfa) {
                     printf("        ");
                 }
 
-                if (c2 == hi) {
-                    /* 单字符 */
-                    if (c2 >= 32 && c2 < 127)
-                        printf("'%c'->%d\n", c2, t);
-                    else
-                        printf("0x%02x->%d\n", c2, t);
-                } else if (c2 + 1 == hi) {
-                    /* 两个字符 */
-                    if (c2 >= 32 && c2 < 127 && hi >= 32 && hi < 127)
-                        printf("'%c','%c'->%d\n", c2, hi, t);
-                    else
-                        printf("0x%02x,0x%02x->%d\n", c2, hi, t);
-                } else {
-                    /* 区间 */
-                    if (c2 >= 32 && c2 < 127 && hi >= 32 && hi < 127)
-                        printf("'%c'-'%c'->%d\n", c2, hi, t);
-                    else
-                        printf("0x%02x-0x%02x->%d\n", c2, hi, t);
-                }
+                format_range_label(NULL, c2, hi, 0);
+                printf("->%d\n", t);
             }
         }
         if (has_any) {
@@ -452,6 +677,13 @@ void dfa_dump_dot(const DFAMachine *dfa, FILE *fp) {
                 continue;
             }
 
+            /* 再尝试字符集合语义化（如 [abc]、[^abc]、a-z） */
+            const char *complex = complex_class_label(st->transitions, t);
+            if (complex) {
+                fprintf(fp, "    S%d -> S%d [label=\"%s\"];\n", s, t, complex);
+                continue;
+            }
+
             /* 否则：从 [0,255] 中挑出所有转移到 t 的字符，合并为连续区间 */
             int done_char[256] = {0};
             int first = 1;
@@ -470,14 +702,7 @@ void dfa_dump_dot(const DFAMachine *dfa, FILE *fp) {
                 if (!first) fputc(',', fp);
                 first = 0;
 
-                const char *cl = char_dot_label(c2);
-                const char *ch = char_dot_label(hi);
-
-                if (c2 == hi) {
-                    fputs(cl, fp);
-                } else {
-                    fprintf(fp, "%s-%s", cl, ch);
-                }
+                format_range_label(fp, c2, hi, 1);
             }
 
             fprintf(fp, "\"];\n");
