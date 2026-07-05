@@ -10,9 +10,166 @@
 /*  每个字符只读一次，永不回溯，时间复杂度 O(n)。                               */
 /* ========================================================================== */
 
-/* -------------------------------------------------------------------------- */
+/* ========================================================================== */
+/*  内部辅助：DOT 标签生成                                                     */
+/* ========================================================================== */
+
+/**
+ * 将单个字符转为 DOT 标签安全的文本。
+ * 双缓冲区支持同语句内多次调用。
+ *
+ * 处理规则：
+ * - 控制字符 → 转义序列 (\n, \r, \t)
+ * - 可打印 ASCII → 原字符（自动转义 \ 和 "）
+ * - 扩展 ASCII → 十六进制 0xx
+ */
+static const char *char_dot_label(int c) {
+    static char buf[2][16];
+    static int  idx = 0;
+    char *b = buf[idx];
+    idx = (idx + 1) % 2;
+
+    switch (c) {
+    case '\n': return "\\n";
+    case '\r': return "\\r";
+    case '\t': return "\\t";
+    case ' ':  return "SP";
+    case '\\': return "\\\\";
+    case '"':  return "\\\"";
+    }
+
+    if (c >= 32 && c <= 126) {
+        b[0] = (char)c;
+        b[1] = '\0';
+        return b;
+    }
+
+    snprintf(b, 16, "0x%02x", (unsigned char)c);
+    return b;
+}
+
+/**
+ * 判断一组字符转移是否匹配某个语义类别（转义序列）。
+ * 返回类别名（静态缓冲区），若不属于任何已知类别则返回 NULL。
+ *
+ * 支持的类别：
+ *   .   → 所有 256 个字节
+ *   \d  → 0-9
+ *   \D  → 非 0-9
+ *   \w  → a-zA-Z0-9_
+ *   \W  → 非 \w
+ *   \s  → 空白字符（空格、\t、\n、\r、\f、\v）
+ *   \S  → 非 \s
+ *
+ * 此函数用于在 DOT 输出中将原始字节区间还原为语义化标签，
+ * 使可视化结果更易读。
+ */
+static const char *semantic_range_label(const int *transitions, int target) {
+    /* ---- . （DOT）：所有 256 个字节都转移到同一目标 ---- */
+    {
+        int all_same = 1;
+        for (int c = 0; c < 256; c++) {
+            if (transitions[c] != target) { all_same = 0; break; }
+        }
+        if (all_same) return ".";
+    }
+
+    /* ---- \d ：0x30-0x39（'0'-'9'） ---- */
+    {
+        int match = 1;
+        for (int c = 0; c < 256; c++) {
+            int expected = ((c >= 0x30 && c <= 0x39) ? target : -1);
+            if (transitions[c] != expected) { match = 0; break; }
+        }
+        if (match) return "\\d";
+    }
+
+    /* ---- \D ：非 0x30-0x39 转移到 target，0x30-0x39 转移到其他 ---- */
+    {
+        int match = 1;
+        int other_target = -2;  /* -2 = 尚未见过其他目标 */
+        for (int c = 0; c < 256; c++) {
+            if (c >= 0x30 && c <= 0x39) {
+                if (transitions[c] == target) { match = 0; break; }
+                if (other_target == -2) other_target = transitions[c];
+                else if (transitions[c] != other_target) { match = 0; break; }
+            } else {
+                if (transitions[c] != target) { match = 0; break; }
+            }
+        }
+        if (match && other_target != -2) return "\\D";
+    }
+
+    /* ---- \w ：a-z A-Z 0-9 _ ---- */
+    {
+        int match = 1;
+        for (int c = 0; c < 256; c++) {
+            int is_word = ((c >= 0x61 && c <= 0x7A) ||
+                           (c >= 0x41 && c <= 0x5A) ||
+                           (c >= 0x30 && c <= 0x39) ||
+                           (c == 0x5F));
+            int expected = (is_word ? target : -1);
+            if (transitions[c] != expected) { match = 0; break; }
+        }
+        if (match) return "\\w";
+    }
+
+    /* ---- \W ：非 \w ---- */
+    {
+        int match = 1;
+        int other_target = -2;  /* -2 = 尚未见过其他目标 */
+        for (int c = 0; c < 256; c++) {
+            int is_word = ((c >= 0x61 && c <= 0x7A) ||
+                           (c >= 0x41 && c <= 0x5A) ||
+                           (c >= 0x30 && c <= 0x39) ||
+                           (c == 0x5F));
+            if (is_word) {
+                if (transitions[c] == target) { match = 0; break; }
+                if (other_target == -2) other_target = transitions[c];
+                else if (transitions[c] != other_target) { match = 0; break; }
+            } else {
+                if (transitions[c] != target) { match = 0; break; }
+            }
+        }
+        if (match && other_target != -2) return "\\W";
+    }
+
+    /* ---- \s ：空格(0x20) \t(0x09) \n(0x0A) \r(0x0D) \f(0x0C) \v(0x0B) ---- */
+    {
+        int match = 1;
+        for (int c = 0; c < 256; c++) {
+            int is_space = (c == 0x20 || c == 0x09 || c == 0x0A ||
+                            c == 0x0D || c == 0x0C || c == 0x0B);
+            int expected = (is_space ? target : -1);
+            if (transitions[c] != expected) { match = 0; break; }
+        }
+        if (match) return "\\s";
+    }
+
+    /* ---- \S ：非 \s ---- */
+    {
+        int match = 1;
+        int other_target = -2;  /* -2 = 尚未见过其他目标 */
+        for (int c = 0; c < 256; c++) {
+            int is_space = (c == 0x20 || c == 0x09 || c == 0x0A ||
+                            c == 0x0D || c == 0x0C || c == 0x0B);
+            if (is_space) {
+                if (transitions[c] == target) { match = 0; break; }
+                if (other_target == -2) other_target = transitions[c];
+                else if (transitions[c] != other_target) { match = 0; break; }
+            } else {
+                if (transitions[c] != target) { match = 0; break; }
+            }
+        }
+        if (match && other_target != -2) return "\\S";
+    }
+
+    return NULL;
+}
+
+/* ========================================================================== */
 /*  内部辅助：将 char 映射为 0..255 的索引                                      */
-/* -------------------------------------------------------------------------- */
+/* ========================================================================== */
 
 static inline int char_to_index(char c) {
     return (unsigned char)c;
@@ -172,47 +329,57 @@ void dfa_dump(const DFAMachine *dfa) {
                state->id,
                state->is_accept ? "(接受)" : "");
 
-        /* 合并连续字符区间输出（与 dfa_dump_dot 逻辑一致） */
+        /* 按目标状态分组后合并连续字符区间输出。
+         * 同一个 (source, target) 对的所有区间只打印一行。 */
         int targets[256];
         for (int c = 0; c < 256; c++) {
             targets[c] = state->transitions[c];
         }
 
-        int done[256] = {0};
+        int t_done[256] = {0};
         int has_any = 0;
         for (int c = 0; c < 256; c++) {
             int t = targets[c];
-            if (t == -1 || done[c]) continue;
+            if (t == -1 || t_done[t]) continue;
+            t_done[t] = 1;
 
-            int hi = c;
-            while (hi + 1 < 256 && targets[hi + 1] == t && !done[hi + 1]) {
-                hi++;
-            }
-            for (int j = c; j <= hi; j++) done[j] = 1;
+            /* 收集所有转移到 t 的连续区间 */
+            int done_char[256] = {0};
+            for (int c2 = 0; c2 < 256; c2++) {
+                if (targets[c2] != t || done_char[c2]) continue;
 
-            if (!has_any) {
-                printf("  转移: ");
-                has_any = 1;
-            }
+                int hi = c2;
+                while (hi + 1 < 256 && targets[hi + 1] == t && !done_char[hi + 1]) {
+                    hi++;
+                }
+                for (int j = c2; j <= hi; j++) done_char[j] = 1;
 
-            if (c == hi) {
-                /* 单字符 */
-                if (c >= 32 && c < 127)
-                    printf("'%c'->%d ", c, t);
-                else
-                    printf("0x%02x->%d ", c, t);
-            } else if (c + 1 == hi) {
-                /* 两个字符 */
-                if (c >= 32 && c < 127 && hi >= 32 && hi < 127)
-                    printf("'%c','%c'->%d ", c, hi, t);
-                else
-                    printf("0x%02x,0x%02x->%d ", c, hi, t);
-            } else {
-                /* 区间 */
-                if (c >= 32 && c < 127 && hi >= 32 && hi < 127)
-                    printf("'%c'-'%c'->%d ", c, hi, t);
-                else
-                    printf("0x%02x-0x%02x->%d ", c, hi, t);
+                if (!has_any) {
+                    printf("  转移: ");
+                    has_any = 1;
+                } else {
+                    printf("        ");
+                }
+
+                if (c2 == hi) {
+                    /* 单字符 */
+                    if (c2 >= 32 && c2 < 127)
+                        printf("'%c'->%d\n", c2, t);
+                    else
+                        printf("0x%02x->%d\n", c2, t);
+                } else if (c2 + 1 == hi) {
+                    /* 两个字符 */
+                    if (c2 >= 32 && c2 < 127 && hi >= 32 && hi < 127)
+                        printf("'%c','%c'->%d\n", c2, hi, t);
+                    else
+                        printf("0x%02x,0x%02x->%d\n", c2, hi, t);
+                } else {
+                    /* 区间 */
+                    if (c2 >= 32 && c2 < 127 && hi >= 32 && hi < 127)
+                        printf("'%c'-'%c'->%d\n", c2, hi, t);
+                    else
+                        printf("0x%02x-0x%02x->%d\n", c2, hi, t);
+                }
             }
         }
         if (has_any) {
@@ -225,31 +392,6 @@ void dfa_dump(const DFAMachine *dfa) {
     printf("====================================\n");
 }
 
-/* ========================================================================== */
-/*  dfa_dump_dot — Graphviz DOT 输出                                           */
-/* ========================================================================== */
-
-/** 将字符转为 DOT 安全的标签文本 */
-static const char *char_dot_label(int c) {
-    static char buf[8];
-    if (c >= 32 && c <= 126) {
-        if (c == '"')  return "\\\"";
-        if (c == '\\') return "\\\\";
-        snprintf(buf, sizeof(buf), "%c", c);
-        return buf;
-    }
-    /* 特殊空白字符 */
-    switch (c) {
-    case '\n': return "\\\\n";
-    case '\r': return "\\\\r";
-    case '\t': return "\\\\t";
-    case ' ':  return "SP";
-    }
-    /* 其他控制字符：十六进制 */
-    snprintf(buf, sizeof(buf), "0x%02x", c);
-    return buf;
-}
-
 /**
  * 将 DFA 的状态转移表以 Graphviz DOT 格式输出到指定文件。
  *
@@ -259,6 +401,7 @@ static const char *char_dot_label(int c) {
  * - 起始状态由不可见节点 (shape=point) 的边标记
  * - 边标签合并连续字符为区间（如 "a-c"、"0-9"），避免 256 条独立边爆炸
  * - -1 转移不画边（隐式死状态）
+ * - 语义化标签：.（任意字符）、\d/\D/\w/\W/\s/\S 等自动识别
  *
  * 用法：将输出粘贴到 https://viz-js.com 或 VS Code Graphviz 扩展可直接查看。
  *
@@ -289,46 +432,55 @@ void dfa_dump_dot(const DFAMachine *dfa, FILE *fp) {
     fprintf(fp, "\n    /* start edge */\n");
     fprintf(fp, "    start -> S%d;\n", dfa->start_state);
 
-    /* 对每个状态，按目标状态分组并合并连续字符区间 */
-    fprintf(fp, "\n    /* transitions (character ranges merged) */\n");
+    /* 对每个状态，按目标状态分组后合并连续字符区间。
+     * 同一个 (source, target) 对只出一条边，标签尝试语义化识别。 */
+    fprintf(fp, "\n    /* transitions (character ranges merged per target) */\n");
     for (int s = 0; s < dfa->state_count; s++) {
         const DFAState *st = &dfa->states[s];
 
-        /* 记录每个字符的目标 state */
-        int targets[256];
+        /* 收集每个目标状态的所有字符（比特集） */
+        int done_targets[256] = {0};
         for (int c = 0; c < 256; c++) {
-            targets[c] = st->transitions[c];
-        }
+            int t = st->transitions[c];
+            if (t == -1 || done_targets[t]) continue;
+            done_targets[t] = 1;
 
-        /* 对每个曾经出现的目标 state 输出边 */
-        int done[256] = {0};
-        for (int c = 0; c < 256; c++) {
-            int t = targets[c];
-            if (t == -1 || done[c]) continue;
-
-            /* 找到连续区间 [c, hi] */
-            int hi = c;
-            while (hi + 1 < 256 && targets[hi + 1] == t && !done[hi + 1]) {
-                hi++;
+            /* 先尝试语义化识别整个转移（如 .、\d、\w 等） */
+            const char *semantic = semantic_range_label(st->transitions, t);
+            if (semantic) {
+                fprintf(fp, "    S%d -> S%d [label=\"%s\"];\n", s, t, semantic);
+                continue;
             }
 
-            /* 标记已处理 */
-            for (int j = c; j <= hi; j++) done[j] = 1;
+            /* 否则：从 [0,255] 中挑出所有转移到 t 的字符，合并为连续区间 */
+            int done_char[256] = {0};
+            int first = 1;
 
-            /* 生成标签 */
-            if (c == hi) {
-                /* 单字符 */
-                fprintf(fp, "    S%d -> S%d [label=\"%s\"];\n",
-                        s, t, char_dot_label(c));
-            } else if (c + 1 == hi) {
-                /* 两个字符，用逗号连 */
-                fprintf(fp, "    S%d -> S%d [label=\"%s,%s\"];\n",
-                        s, t, char_dot_label(c), char_dot_label(hi));
-            } else {
-                /* 三个及以上连续字符，用区间 */
-                fprintf(fp, "    S%d -> S%d [label=\"%s-%s\"];\n",
-                        s, t, char_dot_label(c), char_dot_label(hi));
+            fprintf(fp, "    S%d -> S%d [label=\"", s, t);
+
+            for (int c2 = 0; c2 < 256; c2++) {
+                if (st->transitions[c2] != t || done_char[c2]) continue;
+
+                int hi = c2;
+                while (hi + 1 < 256 && st->transitions[hi + 1] == t && !done_char[hi + 1]) {
+                    hi++;
+                }
+                for (int j = c2; j <= hi; j++) done_char[j] = 1;
+
+                if (!first) fputc(',', fp);
+                first = 0;
+
+                const char *cl = char_dot_label(c2);
+                const char *ch = char_dot_label(hi);
+
+                if (c2 == hi) {
+                    fputs(cl, fp);
+                } else {
+                    fprintf(fp, "%s-%s", cl, ch);
+                }
             }
+
+            fprintf(fp, "\"];\n");
         }
     }
 
