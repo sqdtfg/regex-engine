@@ -494,6 +494,53 @@ static const char *complex_class_label(const int *transitions, int target) {
         return buf;
     }
 
+    /* ---- 策略 4b：区间模式推断 — 尝试合并为标准字符类描述 ---- */
+    {
+        /* 检查区间是否为数字+大写字母+小写字母的某种组合 */
+        int has_digits = 0, has_upper = 0, has_lower = 0;
+        int other_intervals = 0;
+
+        for (int i = 0; i < interval_count && i < 10; i++) {
+            int lo = intervals[i * 2], hi = intervals[i * 2 + 1];
+            if (lo < 32 || lo > 126 || hi < 32 || hi > 126) {
+                other_intervals++;
+                continue;
+            }
+            /* 判断区间属于哪个类别 */
+            int digit = (lo >= 0x30 && hi <= 0x39);
+            int upper = (lo >= 0x41 && hi <= 0x5A);
+            int lower = (lo >= 0x61 && hi <= 0x7A);
+            if (digit) has_digits = 1;
+            else if (upper) has_upper = 1;
+            else if (lower) has_lower = 1;
+            else { other_intervals++; }
+        }
+
+        if (other_intervals == 0 && interval_count <= 4) {
+            /* 所有区间都是标准 ASCII 类别，尝试紧凑输出 */
+            int pos = 0;
+            buf[pos++] = '[';
+            int first_group = 1;
+            if (has_digits) {
+                buf[pos++] = '0'; buf[pos++] = '-'; buf[pos++] = '9';
+                first_group = 0;
+            }
+            if (has_upper) {
+                if (!first_group) buf[pos++] = '-';
+                buf[pos++] = 'A'; buf[pos++] = '-'; buf[pos++] = 'Z';
+                first_group = 0;
+            }
+            if (has_lower) {
+                if (!first_group) buf[pos++] = '-';
+                buf[pos++] = 'a'; buf[pos++] = '-'; buf[pos++] = 'z';
+                first_group = 0;
+            }
+            buf[pos++] = ']';
+            buf[pos] = '\0';
+            return buf;
+        }
+    }
+
     /* ---- 策略 5：多区间 → 逗号分隔 ---- */
     if (interval_count <= 10) {
         int pos = 0;

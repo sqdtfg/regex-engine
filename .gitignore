@@ -27,3 +27,6 @@ docs/
 
 # DOT
 *.dot
+
+# log
+log/

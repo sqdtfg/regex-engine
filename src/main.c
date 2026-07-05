@@ -38,7 +38,9 @@ int main(int argc, char *argv[]) {
 #endif
 
     /* 默认测试输入 */
-    const char *pattern = (argc >= 2) ? argv[1] : "a|bc*";
+    // const char *pattern = (argc >= 2) ? argv[1] : "a|bc*";
+    const char *pattern = (argc >= 2) ? argv[1] : "a|bc*|[^abc]|[a-zA-Z0-9]ab.x*y+z?";
+
 
     printf("╔══════════════════════════════════════╗\n");
     printf("║     正则表达式引擎演示                ║\n");
