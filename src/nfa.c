@@ -524,6 +524,66 @@ void nfa_dump(const NFAGraph *nfa) {
 /* ========================================================================== */
 
 /**
+ * 构建 NFA 边的 DOT 标签字符串（不含引号，调用者负责写入 DOT 文件）。
+ *
+ * DOT 标签中的特殊字符（" \）在本函数内完成转义。
+ *
+ * @param type  边类型
+ * @param ch    NFA_EDGE_CHAR 时的字符
+ * @param esc   NFA_EDGE_ESCAPE 时的转义类型
+ * @param bstr  NFA_EDGE_BRACKET 时的括号内容
+ * @param blen  bstr 的长度
+ * @param style 输出：边的 DOT style 属性前缀（ε 边为 "style=dashed, color=red, "，其余为空）
+ * @param buf   输出：边长内容写入此缓冲区
+ * @param bufsz buf 容量
+ */
+static void nfa_edge_dot_label(NFAEdgeType type, char ch, EscapeSeq esc,
+                                const char *bstr, size_t blen,
+                                const char **style, char *buf, size_t bufsz) {
+    *style = "";
+    switch (type) {
+    case NFA_EDGE_EPSILON:
+        *style = "style=dashed, color=red, ";
+        snprintf(buf, bufsz, "ε");
+        break;
+    case NFA_EDGE_CHAR:
+        if (ch == '"')       snprintf(buf, bufsz, "\\\"");
+        else if (ch == '\\') snprintf(buf, bufsz, "\\\\");
+        else                 snprintf(buf, bufsz, "%c", ch);
+        break;
+    case NFA_EDGE_DOT:
+        snprintf(buf, bufsz, ".");
+        break;
+    case NFA_EDGE_ESCAPE: {
+        static const char *names[] = {"\\\\d","\\\\D","\\\\w","\\\\W","\\\\s","\\\\S"};
+        snprintf(buf, bufsz, "%s", names[esc]);
+        break;
+    }
+    case NFA_EDGE_BRACKET: {
+        /* 构建 [content]，同时对 DOT 特殊字符转义 */
+        size_t pos = 0;
+        if (pos < bufsz) buf[pos++] = '[';
+        if (bstr) {
+            for (size_t j = 0; j < blen && pos < bufsz - 2; j++) {
+                if (bstr[j] == '"') {
+                    if (pos < bufsz - 2) { buf[pos++] = '\\'; buf[pos++] = '"'; }
+                } else if (bstr[j] == '\\') {
+                    if (pos < bufsz - 2) { buf[pos++] = '\\'; buf[pos++] = '\\'; }
+                } else {
+                    buf[pos++] = bstr[j];
+                }
+            }
+        }
+        if (pos < bufsz) buf[pos++] = ']';
+        buf[pos] = '\0';
+        break;
+    }
+    default:
+        snprintf(buf, bufsz, "?");
+    }
+}
+
+/**
  * 将 NFA 图以 Graphviz DOT 格式输出到指定文件。
  *
  * 输出规约：
@@ -573,82 +633,25 @@ void nfa_dump_dot(const NFAGraph *nfa, FILE *fp) {
         NFAState *s = nfa->states[i];
         if (!s) continue;
 
+        char label_buf[256];
+        const char *style;
+
         /* edge1 */
         if (s->edge1_next) {
-            const char *style = "";
-            const char *label = "";
-            switch (s->edge1_type) {
-            case NFA_EDGE_EPSILON:
-                style = "style=dashed, color=red, ";
-                label = "ε";
-                break;
-            case NFA_EDGE_CHAR: {
-                static char buf[8];
-                if (s->edge1_char == '"')  snprintf(buf, sizeof(buf), "\\\"");
-                else if (s->edge1_char == '\\') snprintf(buf, sizeof(buf), "\\\\");
-                else snprintf(buf, sizeof(buf), "%c", s->edge1_char);
-                label = buf;
-                break;
-            }
-            case NFA_EDGE_DOT:
-                label = ".";
-                break;
-            case NFA_EDGE_ESCAPE: {
-                static const char *names[] = {"\\\\d","\\\\D","\\\\w","\\\\W","\\\\s","\\\\S"};
-                label = names[s->edge1_esc];
-                break;
-            }
-            case NFA_EDGE_BRACKET: {
-                static char buf[128];
-                snprintf(buf, sizeof(buf), "[%.*s]",
-                         (int)s->edge1_bracket.len,
-                         s->edge1_bracket.str ? s->edge1_bracket.str : "");
-                label = buf;
-                break;
-            }
-            default: label = "?";
-            }
+            nfa_edge_dot_label(s->edge1_type, s->edge1_char, s->edge1_esc,
+                               s->edge1_bracket.str, s->edge1_bracket.len,
+                               &style, label_buf, sizeof(label_buf));
             fprintf(fp, "    S%d -> S%d [%slabel=\"%s\"];\n",
-                    s->id, s->edge1_next->id, style, label);
+                    s->id, s->edge1_next->id, style, label_buf);
         }
 
         /* edge2 */
         if (s->edge2_next) {
-            const char *style = "";
-            const char *label = "";
-            switch (s->edge2_type) {
-            case NFA_EDGE_EPSILON:
-                style = "style=dashed, color=red, ";
-                label = "ε";
-                break;
-            case NFA_EDGE_CHAR: {
-                static char buf[8];
-                if (s->edge2_char == '"')  snprintf(buf, sizeof(buf), "\\\"");
-                else if (s->edge2_char == '\\') snprintf(buf, sizeof(buf), "\\\\");
-                else snprintf(buf, sizeof(buf), "%c", s->edge2_char);
-                label = buf;
-                break;
-            }
-            case NFA_EDGE_DOT:
-                label = ".";
-                break;
-            case NFA_EDGE_ESCAPE: {
-                static const char *names[] = {"\\\\d","\\\\D","\\\\w","\\\\W","\\\\s","\\\\S"};
-                label = names[s->edge2_esc];
-                break;
-            }
-            case NFA_EDGE_BRACKET: {
-                static char buf[128];
-                snprintf(buf, sizeof(buf), "[%.*s]",
-                         (int)s->edge2_bracket.len,
-                         s->edge2_bracket.str ? s->edge2_bracket.str : "");
-                label = buf;
-                break;
-            }
-            default: label = "?";
-            }
+            nfa_edge_dot_label(s->edge2_type, s->edge2_char, s->edge2_esc,
+                               s->edge2_bracket.str, s->edge2_bracket.len,
+                               &style, label_buf, sizeof(label_buf));
             fprintf(fp, "    S%d -> S%d [%slabel=\"%s\"];\n",
-                    s->id, s->edge2_next->id, style, label);
+                    s->id, s->edge2_next->id, style, label_buf);
         }
     }
 
