@@ -459,7 +459,6 @@ static const char *complex_class_label(const int *transitions, int target) {
     if (interval_count <= 3) {
         /* 检查是否所有非目标字节都是 -1（死状态）或可打印 */
         int all_non_target_is_dead_or_printable = 1;
-        int excl_char_count = 0;
         int excl_pos = 0;
         char excl_chars[16] = {0};
 
@@ -471,11 +470,10 @@ static const char *complex_class_label(const int *transitions, int target) {
             if (transitions[c] == target) continue;
             if (c >= 32 && c <= 126 && excl_pos < 15) {
                 excl_chars[excl_pos++] = (char)c;
-                excl_char_count++;
             }
         }
 
-        if (all_non_target_is_dead_or_printable && excl_char_count > 0 && excl_char_count <= 5) {
+        if (all_non_target_is_dead_or_printable && excl_pos > 0 && excl_pos <= 5) {
             excl_chars[excl_pos] = '\0';
             snprintf(buf, sizeof(buf), "[^%s]", excl_chars);
             return buf;
@@ -494,11 +492,66 @@ static const char *complex_class_label(const int *transitions, int target) {
         return buf;
     }
 
-    /* ---- 策略 4b：区间模式推断 — 尝试合并为标准字符类描述 ---- */
+    /* ---- 策略 4b：hex 字符类检测 [0-9A-Fa-f]（必须在通用策略之前） ---- */
+    {
+        /* 检查区间是否恰好是 hex 子集 */
+        int has_09 = 0, has_AF = 0, has_af = 0;
+        int other_intervals = 0;
+
+        for (int i = 0; i < interval_count && i < 10; i++) {
+            int lo = intervals[i * 2], hi = intervals[i * 2 + 1];
+            if (lo < 32 || lo > 126 || hi < 32 || hi > 126) {
+                other_intervals++;
+                continue;
+            }
+            /* 检查是否是 hex 子集（精确匹配：0-9 必须是完整区间） */
+            if (lo == 0x30 && hi == 0x39) {
+                has_09 = 1;
+            } else if (lo >= 0x41 && hi <= 0x46) {
+                has_AF = 1;
+            } else if (lo >= 0x61 && hi <= 0x66) {
+                has_af = 1;
+            } else {
+                other_intervals++;
+            }
+        }
+
+        if (other_intervals == 0 && (has_09 || has_AF || has_af)) {
+            /* 是 hex 子集，输出紧凑形式 */
+            int pos = 0;
+            buf[pos++] = '[';
+            int first_group = 1;
+
+            if (has_09) {
+                buf[pos++] = '0'; buf[pos++] = '-'; buf[pos++] = '9';
+                first_group = 0;
+            }
+            if (has_AF) {
+                if (!first_group) buf[pos++] = '-';
+                buf[pos++] = 'A'; buf[pos++] = '-'; buf[pos++] = 'F';
+                first_group = 0;
+            }
+            if (has_af) {
+                if (!first_group) buf[pos++] = '-';
+                buf[pos++] = 'a'; buf[pos++] = '-'; buf[pos++] = 'f';
+                first_group = 0;
+            }
+            buf[pos++] = ']';
+            buf[pos] = '\0';
+            return buf;
+        }
+    }
+
+    /* ---- 策略 4c：区间模式推断 — 尝试合并为标准字符类描述 ---- */
     {
         /* 检查区间是否为数字+大写字母+小写字母的某种组合 */
         int has_digits = 0, has_upper = 0, has_lower = 0;
         int other_intervals = 0;
+        int digit_intervals = 0, upper_intervals = 0, lower_intervals = 0;
+        /* 记录每个类别的总覆盖范围 */
+        int digit_lo = 256, digit_hi = -1;
+        int upper_lo = 256, upper_hi = -1;
+        int lower_lo = 256, lower_hi = -1;
 
         for (int i = 0; i < interval_count && i < 10; i++) {
             int lo = intervals[i * 2], hi = intervals[i * 2 + 1];
@@ -510,34 +563,72 @@ static const char *complex_class_label(const int *transitions, int target) {
             int digit = (lo >= 0x30 && hi <= 0x39);
             int upper = (lo >= 0x41 && hi <= 0x5A);
             int lower = (lo >= 0x61 && hi <= 0x7A);
-            if (digit) has_digits = 1;
-            else if (upper) has_upper = 1;
-            else if (lower) has_lower = 1;
-            else { other_intervals++; }
+            if (digit) {
+                has_digits = 1;
+                digit_intervals++;
+                if (lo < digit_lo) digit_lo = lo;
+                if (hi > digit_hi) digit_hi = hi;
+            } else if (upper) {
+                has_upper = 1;
+                upper_intervals++;
+                if (lo < upper_lo) upper_lo = lo;
+                if (hi > upper_hi) upper_hi = hi;
+            } else if (lower) {
+                has_lower = 1;
+                lower_intervals++;
+                if (lo < lower_lo) lower_lo = lo;
+                if (hi > lower_hi) lower_hi = hi;
+            } else {
+                other_intervals++;
+            }
         }
 
         if (other_intervals == 0 && interval_count <= 4) {
-            /* 所有区间都是标准 ASCII 类别，尝试紧凑输出 */
-            int pos = 0;
-            buf[pos++] = '[';
-            int first_group = 1;
-            if (has_digits) {
+            /* 检查每个类别是否恰好填满完整范围且区间数量为 1 */
+            int digits_complete = has_digits && digit_intervals == 1 &&
+                (digit_lo == 0x30 && digit_hi == 0x39);
+            int upper_complete = has_upper && upper_intervals == 1 &&
+                (upper_lo == 0x41 && upper_hi == 0x5A);
+            int lower_complete = has_lower && lower_intervals == 1 &&
+                (lower_lo == 0x61 && lower_hi == 0x7A);
+
+            /* 只有当所有区间恰好填满完整类别时才输出紧凑形式 */
+            if (digits_complete && upper_complete && lower_complete) {
+                /* 三者都有 → [0-9-A-Z-a-z] */
+                buf[0] = '['; buf[1] = '0'; buf[2] = '-'; buf[3] = '9';
+                buf[4] = '-'; buf[5] = 'A'; buf[6] = '-'; buf[7] = 'Z';
+                buf[8] = '-'; buf[9] = 'a'; buf[10] = '-'; buf[11] = 'z';
+                buf[12] = ']'; buf[13] = '\0';
+                return buf;
+            } else if (digits_complete && upper_complete) {
+                /* 数字+大写 → [0-9-A-Z] */
+                int pos = 0;
+                buf[pos++] = '[';
                 buf[pos++] = '0'; buf[pos++] = '-'; buf[pos++] = '9';
-                first_group = 0;
-            }
-            if (has_upper) {
-                if (!first_group) buf[pos++] = '-';
+                buf[pos++] = '-';
                 buf[pos++] = 'A'; buf[pos++] = '-'; buf[pos++] = 'Z';
-                first_group = 0;
-            }
-            if (has_lower) {
-                if (!first_group) buf[pos++] = '-';
+                buf[pos++] = ']'; buf[pos] = '\0';
+                return buf;
+            } else if (digits_complete && lower_complete) {
+                /* 数字+小写 → [0-9-a-z] */
+                int pos = 0;
+                buf[pos++] = '[';
+                buf[pos++] = '0'; buf[pos++] = '-'; buf[pos++] = '9';
+                buf[pos++] = '-';
                 buf[pos++] = 'a'; buf[pos++] = '-'; buf[pos++] = 'z';
-                first_group = 0;
+                buf[pos++] = ']'; buf[pos] = '\0';
+                return buf;
+            } else if (upper_complete && lower_complete) {
+                /* 大写+小写 → [A-Z-a-z] */
+                int pos = 0;
+                buf[pos++] = '[';
+                buf[pos++] = 'A'; buf[pos++] = '-'; buf[pos++] = 'Z';
+                buf[pos++] = '-';
+                buf[pos++] = 'a'; buf[pos++] = '-'; buf[pos++] = 'z';
+                buf[pos++] = ']'; buf[pos] = '\0';
+                return buf;
             }
-            buf[pos++] = ']';
-            buf[pos] = '\0';
-            return buf;
+            /* 不完全匹配 → 走策略 5 逗号分隔 */
         }
     }
 
