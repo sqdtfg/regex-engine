@@ -188,18 +188,35 @@ MatchResult dfa_match(const DFAMachine *dfa, const char *input) {
     }
 
     size_t input_len = strlen(input);
+    size_t search_start = 0;
 
-    for (size_t start = 0; start <= input_len; start++) {
+    /* ^ 锚定：只从位置 0 开始搜索 */
+    if (dfa->has_anchor_start) {
+        search_start = 0;
+    }
+
+    for (size_t start = search_start; start <= input_len; start++) {
+        /* $ 锚定：匹配必须延伸到字符串末尾 */
+        if (dfa->has_anchor_end && start > 0) {
+            /* 非零位置不可能满足 $ 锚定（匹配不会延伸到末尾） */
+            break;
+        }
+
         int current_state = dfa->start_state;
         size_t pos = start;
 
         while (pos <= input_len) {
             if (dfa->states[current_state].is_accept) {
-                result.matched = 1;
-                result.start = start;
-                result.end = pos;
-                result.length = pos - start;
-                return result;
+                /* $ 锚定：接受状态必须在字符串末尾 */
+                if (dfa->has_anchor_end && pos != input_len) {
+                    /* 继续扫描，寻找末尾的接受状态 */
+                } else {
+                    result.matched = 1;
+                    result.start = start;
+                    result.end = pos;
+                    result.length = pos - start;
+                    return result;
+                }
             }
 
             if (pos == input_len) {
@@ -234,7 +251,15 @@ int dfa_match_all(const DFAMachine *dfa, const char *input, MatchResult *results
     size_t input_len = strlen(input);
     size_t pos = 0;
 
+    /* ^ 锚定：只从位置 0 开始搜索 */
+    if (dfa->has_anchor_start) {
+        pos = 0;
+    }
+
     while (pos <= input_len && count < max_results) {
+        /* $ 锚定：非零位置不可能满足 */
+        if (dfa->has_anchor_end && pos > 0) break;
+
         int current_state = dfa->start_state;
         size_t best_end = 0;
         int found = 0;
@@ -242,8 +267,13 @@ int dfa_match_all(const DFAMachine *dfa, const char *input, MatchResult *results
 
         for (i = pos; i <= input_len; i++) {
             if (dfa->states[current_state].is_accept) {
-                best_end = i;
-                found = 1;
+                /* $ 锚定：只接受延伸到末尾的匹配 */
+                if (dfa->has_anchor_end && i != input_len) {
+                    /* 继续扫描 */
+                } else {
+                    best_end = i;
+                    found = 1;
+                }
             }
 
             if (i == input_len) {
