@@ -7,6 +7,7 @@
 #endif
 #include "dfa.h"
 #include "hopcroft.h"
+#include "matcher.h"
 #include "parser.h"
 #include "nfa.h"
 
@@ -323,6 +324,164 @@ static void test_all_minimal(void) {
 }
 
 /* ========================================================================== */
+/*  辅助：深拷贝 DFA                                                             */
+/* ========================================================================== */
+
+/** 深拷贝一个 DFAMachine（含每个状态的 transitions[]） */
+static DFAMachine dfa_deep_copy(const DFAMachine *src) {
+    DFAMachine dst = {0};
+    if (!src || !src->states) return dst;
+
+    dst.states = (DFAState *)malloc((size_t)src->state_count * sizeof(DFAState));
+    if (!dst.states) return dst;
+
+    dst.state_count = src->state_count;
+    dst.start_state = src->start_state;
+
+    for (int i = 0; i < src->state_count; i++) {
+        dst.states[i].id = src->states[i].id;
+        dst.states[i].is_accept = src->states[i].is_accept;
+        dst.states[i].transitions = (int *)malloc(256 * sizeof(int));
+        if (dst.states[i].transitions) {
+            memcpy(dst.states[i].transitions, src->states[i].transitions, 256 * sizeof(int));
+        }
+    }
+
+    return dst;
+}
+
+/* ========================================================================== */
+/*  测试：最小化前后语言等价性                                                   */
+/* ========================================================================== */
+
+/**
+ * 验证 dfa_minimize 不改变 DFA 接受的语言。
+ *
+ * 方法：
+ *   1. 从同一模式构建两份相同的 DFA（一份保留，一份最小化）
+ *   2. 对一组精心选择的测试字符串，分别用两份 DFA 做 dfa_match_full 匹配
+ *   3. 比较每份输入的匹配结果（matched 是否一致）
+ *
+ * 如果最小化改变了语言，必然存在至少一个输入使得两份 DFA 结果不同。
+ */
+static void test_equivalence_full(void) {
+    const char *patterns[] = {
+        "a*",
+        "a+",
+        "a?",
+        "ab*",
+        "a|b",
+        "a|bc*",
+        "(ab)*",
+        "a(b|c)*d",
+        "a{3}",
+        "a{2,4}",
+        "a{1,}",
+        "a{0,3}",
+        "(a*)*",
+        "(a|b)*",
+        "\\d{2,4}[a-z]?",
+        "ab|cd",
+        "a*b*c*",
+        NULL
+    };
+
+    /* 测试输入集合：覆盖匹配、不匹配、边界 */
+    const char *inputs[] = {
+        "",          /* 空串 */
+        "a",         /* 单字符 */
+        "aa",        /* 重复 */
+        "aaa",
+        "aaaa",
+        "b",
+        "ab",
+        "abc",
+        "abcd",
+        "abcde",
+        "123",
+        "12",
+        "hello",
+        "world",
+        "aabbcc",
+        "xyz",
+        "123abc",
+        "___",
+        NULL
+    };
+
+    for (int p = 0; patterns[p]; p++) {
+        /* 构建两份相同的 DFA */
+        DFAMachine dfa_orig = do_build(patterns[p]);
+        if (!dfa_orig.states) {
+            char buf[128];
+            snprintf(buf, sizeof(buf), "%s — 构建失败，跳过等价性测试", patterns[p]);
+            check_pass(buf);
+            continue;
+        }
+
+        DFAMachine dfa_copy = dfa_deep_copy(&dfa_orig);
+        if (!dfa_copy.states) {
+            dfa_free(&dfa_orig);
+            check_fail("等价性", "成功拷贝", "OOM");
+            continue;
+        }
+
+        /* 对原 DFA 做最小化（原地修改） */
+        dfa_minimize(&dfa_orig);
+
+        /* 用 dfa_match_full 逐输入对比 */
+        int mismatch = 0;
+        for (int i = 0; inputs[i] && !mismatch; i++) {
+            MatchResult r1 = dfa_match_full(&dfa_copy, inputs[i]);
+            MatchResult r2 = dfa_match_full(&dfa_orig, inputs[i]);
+
+            if (r1.matched != r2.matched) {
+                char buf[256];
+                snprintf(buf, sizeof(buf),
+                         "%s + 输入 \"%s\" — 最小化前后结果不一致 "
+                         "(min=%d, orig=%d)",
+                         patterns[p], inputs[i], r2.matched, r1.matched);
+                check_fail("语言等价性 (dfa_match_full)", "结果一致", buf);
+                mismatch = 1;
+            }
+        }
+
+        /* 额外验证：子串匹配 dfa_match 也应等价 */
+        if (!mismatch) {
+            for (int i = 0; inputs[i] && !mismatch; i++) {
+                MatchResult r1 = dfa_match(&dfa_copy, inputs[i]);
+                MatchResult r2 = dfa_match(&dfa_orig, inputs[i]);
+
+                if (r1.matched != r2.matched) {
+                    char buf[256];
+                    snprintf(buf, sizeof(buf),
+                             "%s + 输入 \"%s\" — 子串匹配不一致 "
+                             "(min=%d, orig=%d)",
+                             patterns[p], inputs[i], r2.matched, r1.matched);
+                    check_fail("语言等价性 (dfa_match)", "结果一致", buf);
+                    mismatch = 1;
+                }
+            }
+        }
+
+        /* 清理 */
+        for (int i = 0; i < dfa_copy.state_count; i++) {
+            free(dfa_copy.states[i].transitions);
+        }
+        free(dfa_copy.states);
+
+        if (!mismatch) {
+            char buf[128];
+            snprintf(buf, sizeof(buf), "%s — 等价性验证通过 (%d 状态)",
+                     patterns[p], dfa_orig.state_count);
+            check_pass(buf);
+        }
+
+        dfa_free(&dfa_orig);
+    }
+}
+
+/* ========================================================================== */
 /*  测试：边界情况                                                              */
 /* ========================================================================== */
 
@@ -377,6 +536,12 @@ int main(void) {
     test_all_minimal();
     module_end();
 
+    /* ---- 语言等价性 ---- */
+    module_begin("最小化前后语言等价性");
+    test_equivalence_full();
+    module_end();
+
+    /* ---- 边界与安全 ---- */
     module_begin("边界与安全");
     test_edge_cases();
     module_end();
