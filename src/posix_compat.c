@@ -135,6 +135,9 @@ int regcomp(regex_prog_t *prog, const char *pattern, int cflags) {
                     *heap_dfa = cap_dfa;
                     prog->capture_dfa = heap_dfa;
                     prog->nsub = count_capture_groups(pattern);
+                    /* 传播锚定标志 */
+                    ((DFAMachine *)prog->capture_dfa)->has_anchor_start = ast_has_anchor(ast, 1);
+                    ((DFAMachine *)prog->capture_dfa)->has_anchor_end = ast_has_anchor(ast, 0);
                 } else {
                     dfa_free(&cap_dfa);
                     prog->capture_dfa = NULL;

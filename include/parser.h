@@ -20,6 +20,8 @@ typedef enum {
     AST_QUESTION,       /* 问号 a?         — 一元 */
     AST_CURLY,          /* 量词 a{m,n}     — 一元 */
     AST_GROUP,          /* 括号 (a)        — 一元（捕获组） */
+    AST_ANCHOR_START,   /* ^ 行首锚定      — 零宽度 */
+    AST_ANCHOR_END,     /* $ 行尾锚定      — 零宽度 */
 } ASTNodeType;
 
 /* 前向声明 */
@@ -75,6 +77,9 @@ void ast_free(ASTNode *node);
 
 /** 克隆 AST 树（深拷贝） */
 ASTNode *ast_clone(const ASTNode *node);
+
+/** 检查 AST 中是否包含指定类型的锚定 */
+int ast_has_anchor(const ASTNode *node, int is_start);
 
 /** 将 AST 节点类型转为中文名称（调试用） */
 const char *ast_type_name(ASTNodeType type);
