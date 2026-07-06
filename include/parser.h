@@ -73,6 +73,9 @@ ASTNode *parser_parse(Parser *parser);
 /** 释放 AST 树 */
 void ast_free(ASTNode *node);
 
+/** 克隆 AST 树（深拷贝） */
+ASTNode *ast_clone(const ASTNode *node);
+
 /** 将 AST 节点类型转为中文名称（调试用） */
 const char *ast_type_name(ASTNodeType type);
 

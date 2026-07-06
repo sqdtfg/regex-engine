@@ -22,6 +22,8 @@
 #include <stdlib.h>
 
 #include "api.h"
+#include "capture.h"
+#include "parser.h"
 
 /* -------------------------------------------------------------------------- */
 /*  内部：统计捕获组数量                                                       */
@@ -42,7 +44,6 @@ static int count_capture_groups(const char *pattern) {
     int count = 0;
     int escaped = 0;
     int in_bracket = 0;
-    int bracket_negated = 0;
 
     for (const char *p = pattern; *p; p++) {
         if (escaped) {
@@ -57,13 +58,11 @@ static int count_capture_groups(const char *pattern) {
 
         if (*p == '[' && !in_bracket) {
             in_bracket = 1;
-            bracket_negated = (*p == '^');
             continue;
         }
 
         if (*p == ']' && in_bracket) {
             in_bracket = 0;
-            bracket_negated = 0;
             continue;
         }
 
@@ -120,7 +119,36 @@ int regcomp(regex_prog_t *prog, const char *pattern, int cflags) {
     prog->re_errcode = 0;
     prog->re_errmsg[0] = '\0';
     prog->internal = internal;
-    prog->nsub = count_capture_groups(pattern);
+
+    /* 构建带捕获组信息的 DFA */
+    {
+        Parser parser;
+        parser_init(&parser, pattern);
+        ASTNode *ast = parser_parse(&parser);
+        if (ast) {
+            DFAMachine cap_dfa = dfa_from_ast_with_groups(ast);
+            ast_free(ast);
+            if (cap_dfa.states) {
+                /* 分配堆内存存储 DFAMachine 结构体 */
+                DFAMachine *heap_dfa = (DFAMachine *)malloc(sizeof(*heap_dfa));
+                if (heap_dfa) {
+                    *heap_dfa = cap_dfa;
+                    prog->capture_dfa = heap_dfa;
+                    prog->nsub = count_capture_groups(pattern);
+                } else {
+                    dfa_free(&cap_dfa);
+                    prog->capture_dfa = NULL;
+                    prog->nsub = 0;
+                }
+            } else {
+                prog->capture_dfa = NULL;
+                prog->nsub = 0;
+            }
+        } else {
+            prog->capture_dfa = NULL;
+            prog->nsub = 0;
+        }
+    }
 
     return REG_OK;
 }
@@ -142,7 +170,7 @@ int regexec(const regex_prog_t *prog, const char *string,
     }
 
     /* REG_NOSUB：不需要匹配位置信息，只需判断是否匹配 */
-    if (prog->re_flags & REG_NOSUB) {
+    if (eflags & REG_NOSUB) {
         int result = regex_match(internal, string, NULL);
         return result ? 0 : REG_NOMATCH;
     }
@@ -154,7 +182,36 @@ int regexec(const regex_prog_t *prog, const char *string,
     /* 清零输出 */
     memset(pmatch, 0xFF, sizeof(regmatch_t) * nmatch);
 
-    /* 先用 regex_match 做全串匹配 */
+    /* 优先使用带捕获组的 DFA */
+    if (prog->capture_dfa) {
+        DFAMachine *cap_dfa = (DFAMachine *)prog->capture_dfa;
+        CapturedMatch cm = dfa_match_captured(cap_dfa, string);
+
+        if (cm.matched) {
+            /* 第 0 组 = 完整匹配 */
+            pmatch[0].rm_so = (regoff_t)cm.start;
+            pmatch[0].rm_eo = (regoff_t)cm.end;
+
+            /* 捕获组（第 1..nsub 组） */
+            size_t limit = nmatch;
+            if (limit > (size_t)cm.group_count + 1) {
+                limit = cm.group_count + 1;
+            }
+            for (size_t i = 1; i < limit; i++) {
+                if (cm.groups[i].matched) {
+                    pmatch[i].rm_so = (regoff_t)cm.groups[i].start;
+                    pmatch[i].rm_eo = (regoff_t)cm.groups[i].end;
+                }
+            }
+
+            captured_match_free(&cm);
+            return 0;
+        }
+
+        captured_match_free(&cm);
+    }
+
+    /* 回退：使用普通 DFA 只做全串匹配 */
     MatchResult m;
     int matched = regex_match(internal, string, &m);
 
@@ -171,8 +228,11 @@ int regexec(const regex_prog_t *prog, const char *string,
     pmatch[0].rm_so = (regoff_t)m.start;
     pmatch[0].rm_eo = (regoff_t)m.end;
 
-    /* TODO: 捕获组详细信息 — 当前版本只返回完整匹配（第 0 组）。
-     * 要支持捕获组需要扩展底层 API（capture.h 已有 CapturedMatch 类型）。 */
+    /* 捕获组信息（第 1..nsub 组）暂未实现 — 需要扩展底层 API 传递捕获组数据 */
+    for (size_t i = 1; i < nmatch && i <= (size_t)prog->nsub; i++) {
+        pmatch[i].rm_so = -1;
+        pmatch[i].rm_eo = -1;
+    }
 
     return 0;
 }
@@ -184,6 +244,12 @@ int regexec(const regex_prog_t *prog, const char *string,
 void regfree(regex_prog_t *prog) {
     if (!prog) {
         return;
+    }
+
+    if (prog->capture_dfa) {
+        DFAMachine *cap_dfa = (DFAMachine *)prog->capture_dfa;
+        dfa_capture_free(cap_dfa);
+        prog->capture_dfa = NULL;
     }
 
     if (prog->internal) {

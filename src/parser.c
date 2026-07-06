@@ -312,6 +312,29 @@ void ast_free(ASTNode *node) {
     free(node);
 }
 
+/** 递归克隆 AST 节点（深拷贝） */
+ASTNode *ast_clone(const ASTNode *node) {
+    if (!node) return NULL;
+
+    ASTNode *clone = calloc(1, sizeof(*clone));
+    if (!clone) return NULL;
+
+    *clone = *node;  /* 浅拷贝所有字段 */
+
+    if (node->type == AST_BRACKET && node->bracket.str) {
+        clone->bracket.str = strdup(node->bracket.str);
+        if (!clone->bracket.str) {
+            free(clone);
+            return NULL;
+        }
+    }
+
+    clone->left = ast_clone(node->left);
+    clone->right = ast_clone(node->right);
+
+    return clone;
+}
+
 const char *ast_type_name(ASTNodeType type) {
     switch (type) {
         case AST_CHAR:      return "普通字符";

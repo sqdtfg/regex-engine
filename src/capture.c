@@ -41,7 +41,7 @@
 typedef struct {
     int id;                 /* 组编号（从 1 开始） */
     size_t pattern_pos;     /* 组在 pattern 中的起始偏移（'(' 的位置） */
-    const ASTNode *sub_ast; /* 组内部的子 AST（AST_GROUP.left） */
+    ASTNode *sub_ast;       /* 组内部的子 AST（AST_GROUP.left）— 克隆副本 */
 } GroupMeta;
 
 /**
@@ -128,12 +128,13 @@ static int collect_group_metas_recursive(const ASTNode *node, int next_id,
     if (!node) return next_id;
 
     if (node->type == AST_GROUP) {
-        metas_out[next_id].id = next_id + 1;
-        metas_out[next_id].sub_ast = node->left;
+        metas_out[next_id].id = next_id;
+        metas_out[next_id].sub_ast = ast_clone(node->left);
         metas_out[next_id].pattern_pos = node->pos;
         next_id++;
-        /* 继续遍历子节点（捕获组内部可能嵌套其他组） */
+        /* 继续遍历组内部（可能有嵌套组） */
         next_id = collect_group_metas_recursive(node->left, next_id, metas_out);
+        /* 组节点处理完毕，不继续遍历兄弟（组本身是叶子式的包装） */
         return next_id;
     }
 
@@ -156,7 +157,7 @@ static int collect_group_metas_recursive(const ASTNode *node, int next_id,
  *
  * 这与 POSIX regexec 的贪婪语义一致：对于可重复量词，取最长匹配。
  */
-static size_t match_sub_dfa_greedy(const ASTNode *sub_ast,
+static size_t match_sub_dfa_greedy(ASTNode *sub_ast,
                                     const char *text,
                                     size_t text_start,
                                     size_t text_len) {
@@ -208,7 +209,8 @@ static size_t match_sub_dfa_greedy(const ASTNode *sub_ast,
     dfa_free(&sub_dfa);
 
     /* 返回相对偏移（从 text_start 算起） */
-    if (last_accept > text_start) {
+    /* 注意：last_accept 可能是 text_start（空匹配），此时返回 0 表示匹配了 0 个字符 */
+    if (last_accept >= text_start) {
         return last_accept - text_start;
     }
     return 0;
@@ -271,6 +273,12 @@ void dfa_capture_free(DFAMachine *dfa) {
     /* 从映射表中查找并释放 CaptureData */
     CaptureData *capdata = capture_map_find(dfa->states);
     if (capdata) {
+        /* 释放每个组的子 AST 克隆 */
+        if (capdata->groups) {
+            for (int i = 1; i <= capdata->group_count; i++) {
+            ast_free(capdata->groups[i].sub_ast);
+            }
+        }
         capture_map_remove(dfa->states);
         free(capdata);
     }
@@ -295,7 +303,42 @@ CapturedMatch dfa_match_captured(const DFAMachine *dfa, const char *input) {
     int group_count = capdata ? capdata->group_count : 0;
 
     /* 2. 用基础 DFA 匹配找到完整匹配区间 */
-    MatchResult full_match = dfa_match(dfa, input);
+    MatchResult full_match = {0};
+    /* 注意：需要使用贪婪匹配（最长匹配），而非 dfa_match 的最短匹配语义 */
+    {
+        size_t input_len = strlen(input);
+        size_t best_end = 0;
+        int found = 0;
+        size_t m_start;
+
+        for (m_start = 0; m_start <= input_len; m_start++) {
+            int state = dfa->start_state;
+            size_t pos = m_start;
+
+            while (pos <= input_len) {
+                if (dfa->states[state].is_accept) {
+                    best_end = pos;
+                    found = 1;
+                }
+                if (pos == input_len) break;
+                int idx = (unsigned char)input[pos];
+                int next = dfa->states[state].transitions[idx];
+                if (next == -1) break;
+                state = next;
+                pos++;
+            }
+            if (found) break;  /* 找到从 m_start 开始的最长匹配 */
+        }
+
+        if (!found) {
+            return result;
+        }
+
+        full_match.matched = 1;
+        full_match.start = m_start;
+        full_match.end = best_end;
+        full_match.length = best_end - m_start;
+    }
     if (!full_match.matched) {
         return result;
     }

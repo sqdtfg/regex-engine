@@ -386,17 +386,17 @@ void dfa_minimize(DFAMachine *dfa) {
 
     /* ==== 清理 ==== */
 oom:
-    if (work) {
-        for (int i = 0; i < n; i++) free(work[i].transitions);
-        free(work);
-    }
-    if (rev) free_rev_lists(rev, n);
-    free(block_of);
+    /* 清理所有已分配的临时资源 */
+    if (in_preimage) free(in_preimage);
+    if (W) free(W);
     if (blocks_vec) {
         for (int b = 0; b < block_count; b++) int_vec_free(&blocks_vec[b]);
         free(blocks_vec);
     }
-    free(W);
-    free(in_preimage);
-    int_vec_free(&preimage);
+    if (block_of) free(block_of);
+    if (rev) free_rev_lists(rev, n);
+    if (work) {
+        for (int i = 0; i < n; i++) free(work[i].transitions);
+        free(work);
+    }
 }

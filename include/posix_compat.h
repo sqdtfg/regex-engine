@@ -2,6 +2,7 @@
 #define REGEX_POSIX_COMPAT_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 /* ========================================================================== */
 /*  POSIX 正则表达式兼容层                                                       */
@@ -30,6 +31,13 @@ extern "C" {
  *   rm_so = start offset  (-1 = 未捕获)
  *   rm_eo = end offset    (-1 = 未捕获)
  */
+typedef intptr_t regoff_t;
+
+/**
+ * 匹配范围。对标 POSIX regmatch_t：
+ *   rm_so = start offset  (-1 = 未捕获)
+ *   rm_eo = end offset    (-1 = 未捕获)
+ */
 typedef struct {
     regoff_t rm_so;   /* start offset */
     regoff_t rm_eo;   /* end offset */
@@ -43,6 +51,7 @@ typedef struct {
     char         re_errmsg[256]; /* 最近一次错误信息 */
     int          re_errcode;  /* 错误码 (0=OK) */
     void        *internal;    /* 内部 regex_t* (opaque) */
+    void        *capture_dfa; /* 带捕获组的 DFA (DFAMachine*, opaque) */
     int          nsub;        /* 捕获组数量（不含第 0 组） */
 } regex_prog_t;
 

@@ -10,6 +10,8 @@
 #include "nfa.h"
 #include "dfa.h"
 #include "hopcroft.h"
+#include "api.h"
+#include "posix_compat.h"
 
 /**
  * 将正则表达式中的特殊字符转为安全文件名字符。
@@ -119,16 +121,51 @@ int main(int argc, char *argv[]) {
                 printf("  [DOT] 生成 %s 失败\n", dotpath);
         }
 
-        /* 尝试匹配输入字符串 */
-        const char *input = (argc >= 3) ? argv[2] : "bc";
-        MatchResult r = dfa_match(&dfa, input);
-        printf("\n匹配测试: pattern=\"%s\" input=\"%s\"\n", pattern, input);
-        if (r.matched) {
-            printf("  ✓ 匹配成功! start=%zu end=%zu length=%zu\n",
-                   r.start, r.end, r.length);
-            printf("  匹配内容: \"%.*s\"\n", (int)r.length, input + r.start);
-        } else {
-            printf("  ✗ 未匹配\n");
+        /* ---- 使用高级 API 进行匹配 ---- */
+        printf("\n========== 高级 API 测试 ==========\n");
+        {
+            regex_t *prog = regex_compile(pattern, REGEX_FLAG_NONE);
+            if (prog) {
+                const char *test_inputs[] = {"bc", "a", "123", "abc", "abbb", NULL};
+                for (int ti = 0; test_inputs[ti]; ti++) {
+                    const char *input = test_inputs[ti];
+                    MatchResult r;
+                    if (regex_match(prog, input, &r)) {
+                        printf("  regex_match(\"%s\"): ✓ start=%zu end=%zu len=%zu\n",
+                               input, r.start, r.end, r.length);
+                    } else if (regex_search(prog, input, &r)) {
+                        printf("  regex_search(\"%s\"): ✓ start=%zu end=%zu len=%zu\n",
+                               input, r.start, r.end, r.length);
+                    } else {
+                        printf("  regex_(match|search)(\"%s\"): ✗ 未匹配\n", input);
+                    }
+                }
+
+                /* 测试 POSIX 兼容层 */
+                {
+                    regex_prog_t rp;
+                    if (regcomp(&rp, pattern, REG_EXTENDED) == REG_OK) {
+                        regmatch_t pmatch[1];
+                        const char *test_str = "bc";
+                        int rc = regexec(&rp, test_str, 1, pmatch, 0);
+                        if (rc == 0) {
+                            printf("  regexec(\"%s\"): ✓ rm_so=%lld rm_eo=%lld\n",
+                                   test_str, pmatch[0].rm_so, pmatch[0].rm_eo);
+                        } else if (rc == REG_NOMATCH) {
+                            printf("  regexec(\"%s\"): ✗ 未匹配\n", test_str);
+                        } else {
+                            char errbuf[256];
+                            regerror(rc, &rp, errbuf, sizeof(errbuf));
+                            printf("  regexec(\"%s\"): ✗ 错误: %s\n", test_str, errbuf);
+                        }
+                        regfree(&rp);
+                    }
+                }
+
+                regex_free(prog);
+            } else {
+                printf("  编译失败: %s\n", regex_error(REGEX_ERR_PARSE));
+            }
         }
 
         dfa_free(&dfa);

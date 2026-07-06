@@ -60,56 +60,66 @@ if(MINGW OR MSVC)
     add_compile_definitions(_UNICODE UNICODE)
 endif()
 
-# ---------- 自动收集源文件 ----------
-file(GLOB_RECURSE SOURCES
-    "src/*.c"
-)
-
-file(GLOB_RECURSE HEADERS
-    "include/*.h"
-)
+# ---------- 核心源文件（仅用于静态库） ----------
+file(GLOB_RECURSE CORE_SOURCES "src/*.c")
+file(GLOB_RECURSE HEADERS "include/*.h")
 
 # ---------- 静态库：core（核心库） ----------
-add_library(regex_core STATIC ${SOURCES})
+add_library(regex_core STATIC ${CORE_SOURCES})
 target_include_directories(regex_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 # ---------- 可执行程序 ----------
 
-# 1) regex_engine — 主程序
+# 2) regex_engine — 主程序（仅用 src/main.c）
 add_executable(regex_engine src/main.c)
 target_link_libraries(regex_engine PRIVATE regex_core)
 
-# 2) regex_tokenizer_test — 词法分析器测试
+# 3) regex_tokenizer_test — 词法分析器测试
 add_executable(regex_tokenizer_test tests/test_tokenizer.c)
-target_include_directories(regex_tokenizer_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(regex_tokenizer_test PRIVATE regex_core)
 
-# 3) regex_parser_test — 语法解析器测试
+# 4) regex_parser_test — 语法解析器测试
 add_executable(regex_parser_test tests/test_parser.c)
-target_include_directories(regex_parser_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(regex_parser_test PRIVATE regex_core)
 
-# 4) regex_nfa_test — NFA Thompson 构造测试
+# 5) regex_nfa_test — NFA Thompson 构造测试
 add_executable(regex_nfa_test tests/test_nfa.c)
-target_include_directories(regex_nfa_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(regex_nfa_test PRIVATE regex_core)
 
-# 5) regex_dfa_test — DFA 子集构造 + 匹配测试
+# 6) regex_dfa_test — DFA 子集构造 + 匹配测试
 add_executable(regex_dfa_test tests/test_dfa.c)
-target_include_directories(regex_dfa_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(regex_dfa_test PRIVATE regex_core)
 
-# 6) regex_hopcroft_test — Hopcroft DFA 最小化测试
+# 7) regex_hopcroft_test — Hopcroft DFA 最小化测试
 add_executable(regex_hopcroft_test tests/test_hopcroft.c)
-target_include_directories(regex_hopcroft_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(regex_hopcroft_test PRIVATE regex_core)
+
+# 8) regex_matcher_test — 匹配器测试
+add_executable(regex_matcher_test tests/test_matcher.c)
+target_link_libraries(regex_matcher_test PRIVATE regex_core)
+
+# 9) regex_capture_test — 捕获组测试
+add_executable(regex_capture_test tests/test_capture.c)
+target_link_libraries(regex_capture_test PRIVATE regex_core)
+
+# 10) regex_api_test — 高级 API 测试
+add_executable(regex_api_test tests/test_api.c)
+target_link_libraries(regex_api_test PRIVATE regex_core)
+
+# 11) regex_posix_test — POSIX 兼容层测试
+add_executable(regex_posix_test tests/test_posix_compat.c)
+target_link_libraries(regex_posix_test PRIVATE regex_core)
+
+# 12) regex_benchmark — 性能基准测试
+add_executable(regex_benchmark tests/test_benchmark.c)
+target_link_libraries(regex_benchmark PRIVATE regex_core)
 
 # ---------- 安装 ----------
 install(TARGETS regex_core
     ARCHIVE DESTINATION lib
     LIBRARY DESTINATION lib
 )
-install(TARGETS regex_engine regex_tokenizer_test regex_parser_test regex_nfa_test regex_dfa_test regex_hopcroft_test
+install(TARGETS regex_engine regex_tokenizer_test regex_parser_test regex_nfa_test regex_dfa_test regex_hopcroft_test regex_matcher_test regex_capture_test regex_api_test regex_posix_test regex_benchmark
     RUNTIME DESTINATION bin
 )
 install(DIRECTORY include/
@@ -124,7 +134,11 @@ add_custom_target(run_tests
     COMMAND $<TARGET_FILE:regex_nfa_test>
     COMMAND $<TARGET_FILE:regex_dfa_test>
     COMMAND $<TARGET_FILE:regex_hopcroft_test>
-    DEPENDS regex_tokenizer_test regex_parser_test regex_nfa_test regex_dfa_test regex_hopcroft_test
+    COMMAND $<TARGET_FILE:regex_matcher_test>
+    COMMAND $<TARGET_FILE:regex_capture_test>
+    COMMAND $<TARGET_FILE:regex_api_test>
+    COMMAND $<TARGET_FILE:regex_posix_test>
+    DEPENDS regex_tokenizer_test regex_parser_test regex_nfa_test regex_dfa_test regex_hopcroft_test regex_matcher_test regex_capture_test regex_api_test regex_posix_test
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     COMMENT "Running test suite..."
 )

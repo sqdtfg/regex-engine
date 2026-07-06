@@ -802,11 +802,13 @@ void dfa_dump_dot(const DFAMachine *dfa, FILE *fp) {
         const DFAState *st = &dfa->states[s];
 
         /* 收集每个目标状态的所有字符（比特集） */
-        int done_targets[256] = {0};
+        int *done_targets = calloc((size_t)dfa->state_count + 1, sizeof(int));
+        if (!done_targets) done_targets = calloc(257, sizeof(int));  /* fallback */
         for (int c = 0; c < 256; c++) {
             int t = st->transitions[c];
-            if (t == -1 || done_targets[t]) continue;
-            done_targets[t] = 1;
+            if (t == -1) continue;
+            if (done_targets[(size_t)t]) continue;
+            done_targets[(size_t)t] = 1;
 
             /* 先尝试语义化识别整个转移（如 .、\d、\w 等） */
             const char *semantic = semantic_range_label(st->transitions, t);
@@ -845,6 +847,7 @@ void dfa_dump_dot(const DFAMachine *dfa, FILE *fp) {
 
             fprintf(fp, "\"];\n");
         }
+        free(done_targets);
     }
 
     fprintf(fp, "}\n");
