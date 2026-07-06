@@ -641,57 +641,6 @@ static void test_determinism(void) {
 }
 
 /* ========================================================================== */
-/*  测试：锚定 ^ 和 $                                                           */
-/* ========================================================================== */
-
-static void test_anchors(void) {
-    DFAMachine dfa;
-
-    /* ^abc: 必须以 abc 开头 */
-    dfa = do_build("^abc");
-    CHECK_NOT_NULL(dfa.states, "^abc — states 非 NULL");
-    CHECK_TRUE(dfa.has_anchor_start, "^abc — has_anchor_start=1");
-
-    MatchResult r = dfa_match(&dfa, "abc");
-    CHECK_TRUE(r.matched, "^abc: \"abc\" 匹配");
-
-    r = dfa_match(&dfa, "xabc");
-    CHECK_FALSE(r.matched, "^abc: \"xabc\" 不匹配（非开头）");
-
-    dfa_free(&dfa);
-
-    /* abc$: 必须以 abc 结尾 */
-    dfa = do_build("abc$");
-    CHECK_NOT_NULL(dfa.states, "abc$ — states 非 NULL");
-    CHECK_TRUE(dfa.has_anchor_end, "abc$ — has_anchor_end=1");
-
-    r = dfa_match(&dfa, "abc");
-    CHECK_TRUE(r.matched, "abc$: \"abc\" 匹配");
-
-    r = dfa_match(&dfa, "abcd");
-    CHECK_FALSE(r.matched, "abc$: \"abcd\" 不匹配（非结尾）");
-
-    dfa_free(&dfa);
-
-    /* ^abc$: 必须精确匹配 abc */
-    dfa = do_build("^abc$");
-    CHECK_NOT_NULL(dfa.states, "^abc$ — states 非 NULL");
-    CHECK_TRUE(dfa.has_anchor_start, "^abc$ — has_anchor_start=1");
-    CHECK_TRUE(dfa.has_anchor_end, "^abc$ — has_anchor_end=1");
-
-    r = dfa_match(&dfa, "abc");
-    CHECK_TRUE(r.matched, "^abc$: \"abc\" 匹配");
-
-    r = dfa_match(&dfa, "xabc");
-    CHECK_FALSE(r.matched, "^abc$: \"xabc\" 不匹配");
-
-    r = dfa_match(&dfa, "abcd");
-    CHECK_FALSE(r.matched, "^abc$: \"abcd\" 不匹配");
-
-    dfa_free(&dfa);
-}
-
-/* ========================================================================== */
 /*  测试：边界情况                                                              */
 /* ========================================================================== */
 
@@ -791,11 +740,6 @@ int main(void) {
     /* ---- 确定性 ---- */
     module_begin("确定性验证");
     test_determinism();
-    module_end();
-
-    /* ---- 锚定 ---- */
-    module_begin("锚定 ^ 和 $");
-    test_anchors();
     module_end();
 
     /* ---- 边界 ---- */

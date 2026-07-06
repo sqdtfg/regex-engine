@@ -36,8 +36,6 @@ typedef struct {
     DFAState *states;           /* 动态状态数组 */
     int state_count;            /* 状态总数 */
     int start_state;            /* 起始状态 id */
-    int has_anchor_start;       /* 是否有 ^ 锚定（匹配必须从位置 0 开始） */
-    int has_anchor_end;         /* 是否有 $ 锚定（匹配必须到字符串末尾） */
 } DFAMachine;
 
 /* ========================================================================== */

@@ -353,15 +353,6 @@ static NFAFragment build_frag(const ASTNode *node, StateVec *vec) {
     case AST_GROUP:
         return build_frag(node->left, vec);
 
-    /* ============================================================== */
-    /*  零宽度锚定 — 不引入新状态，直接透传子节点                        */
-    /* ============================================================== */
-    case AST_ANCHOR_START:
-    case AST_ANCHOR_END:
-        /* 锚定不影响 NFA 结构，仅影响匹配约束（由 NFAGraph.has_anchor_* 记录） */
-        if (node->left) return build_frag(node->left, vec);
-        { NFAFragment f = { NULL, NULL }; return f; }
-
     /* ---- 防御：遇到未知类型返回空片段 ---- */
     default: {
         NFAFragment f = { NULL, NULL };
@@ -376,20 +367,6 @@ static NFAFragment build_frag(const ASTNode *node, StateVec *vec) {
 
 /**
  * Thompson 构造：从 AST 根节点构建完整 NFA 图。
- *
- * 调用流程：
- *   1. 初始化状态数组
- *   2. 递归调用 build_frag 构造 NFA 子图
- *   3. 将向量中的数据打包为 NFAGraph 返回
- *
- * @param ast_root  由 parser_parse 产出的 AST 根节点
- * @return          完整的 NFA 图（含入口、出口、状态数组）。
- *                  当 ast_root 为 NULL 时返回全零结构。
- *                  调用者最终必须调用 nfa_free() 释放。
- */
-
-/**
- * Thompson 构造：从 AST 根节点构建 NFA。
  *
  * 调用流程：
  *   1. 初始化状态数组

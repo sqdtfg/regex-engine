@@ -102,22 +102,6 @@ static ASTNode *parse_atom(Parser *p) {
         return node;
     }
 
-    /* ---- 行首锚定 ^ ---- */
-    if (tok.type == TOK_CARET) {
-        advance(p);
-        ASTNode *node = ast_node_new(AST_ANCHOR_START);
-        node->pos = tok.pos;
-        return node;
-    }
-
-    /* ---- 行尾锚定 $ ---- */
-    if (tok.type == TOK_DOLLAR) {
-        advance(p);
-        ASTNode *node = ast_node_new(AST_ANCHOR_END);
-        node->pos = tok.pos;
-        return node;
-    }
-
     /* ---- 字符集合 [...] ---- */
     if (tok.type == TOK_BRACKET) {
         advance(p);
@@ -351,16 +335,6 @@ ASTNode *ast_clone(const ASTNode *node) {
     return clone;
 }
 
-/**
- * 检查 AST 中是否包含指定类型的锚定节点。
- */
-int ast_has_anchor(const ASTNode *node, int is_start) {
-    if (!node) return 0;
-    if (is_start && node->type == AST_ANCHOR_START) return 1;
-    if (!is_start && node->type == AST_ANCHOR_END) return 1;
-    return ast_has_anchor(node->left, is_start) || ast_has_anchor(node->right, is_start);
-}
-
 const char *ast_type_name(ASTNodeType type) {
     switch (type) {
         case AST_CHAR:      return "普通字符";
@@ -374,8 +348,6 @@ const char *ast_type_name(ASTNodeType type) {
         case AST_QUESTION:  return "问号量词";
         case AST_CURLY:     return "范围量词";
         case AST_GROUP:     return "捕获组";
-        case AST_ANCHOR_START:  return "行首锚定 ^";
-        case AST_ANCHOR_END:    return "行尾锚定 $";
         default:            return "未知节点";
     }
 }
