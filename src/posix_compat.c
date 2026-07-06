@@ -30,15 +30,15 @@
 /* -------------------------------------------------------------------------- */
 
 /**
- * 启发式统计正则表达式中的捕获组数量。
+ * 统计正则表达式中的捕获组数量。
  *
  * 规则：
  *   - 忽略被转义的 '('
  *   - 忽略字符类 [...] 内部的 '('
- *   - 每个 '(' 计为一个捕获组
+ *   - 每个未被转义的 '(' 计为一个捕获组
  *
- * 注意：这只是一个近似值。POSIX 标准中 nsub 来自编译后的内部结构，
- * 我们无法直接访问，因此用这种启发式方法估算。
+ * 注意：这是一个近似值。POSIX 标准中 nsub 来自编译后的内部结构，
+ * 我们只能启发式估算。嵌套括号也会分别计数。
  */
 static int count_capture_groups(const char *pattern) {
     int count = 0;
@@ -170,9 +170,14 @@ int regexec(const regex_prog_t *prog, const char *string,
     }
 
     /* REG_NOSUB：不需要匹配位置信息，只需判断是否匹配 */
+    /* POSIX regexec 语义是找最左最长子串匹配，因此先用 regex_search */
     if (eflags & REG_NOSUB) {
-        int result = regex_match(internal, string, NULL);
-        return result ? 0 : REG_NOMATCH;
+        MatchResult m = {0};
+        int matched = regex_search(internal, string, &m);
+        if (!matched) {
+            matched = regex_match(internal, string, &m);
+        }
+        return matched ? 0 : REG_NOMATCH;
     }
 
     if (nmatch == 0 || !pmatch) {
@@ -211,13 +216,13 @@ int regexec(const regex_prog_t *prog, const char *string,
         captured_match_free(&cm);
     }
 
-    /* 回退：使用普通 DFA 只做全串匹配 */
+    /* 回退：优先子串匹配（POSIX regexec 语义：最左最长） */
     MatchResult m;
-    int matched = regex_match(internal, string, &m);
+    int matched = regex_search(internal, string, &m);
 
     if (!matched) {
-        /* 全串未匹配，尝试 regex_search 子串匹配 */
-        matched = regex_search(internal, string, &m);
+        /* 子串也未匹配，尝试精确全串匹配 */
+        matched = regex_match(internal, string, &m);
     }
 
     if (!matched) {
@@ -289,7 +294,7 @@ const char *regerror(int errcode, const regex_prog_t *preg,
         msg = "trailing backslash";
         break;
     case REG_EPAREN:
-        msg = "unmatched ) or )";
+        msg = "unmatched ( or )";
         break;
     case REG_EBRACK:
         msg = "unmatched [ or ]";
