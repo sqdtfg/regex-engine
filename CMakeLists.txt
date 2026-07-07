@@ -118,12 +118,16 @@ target_link_libraries(benchmark PRIVATE regex_core)
 add_executable(regex_grep_test tests/test_grep.c)
 target_link_libraries(regex_grep_test PRIVATE regex_core)
 
+# 14) test_runner — 统一测试运行框架
+add_executable(test_runner tests/test_runner.c)
+target_link_libraries(test_runner PRIVATE regex_core)
+
 # ---------- 安装 ----------
 install(TARGETS regex_core
     ARCHIVE DESTINATION lib
     LIBRARY DESTINATION lib
 )
-install(TARGETS regex_engine regex_tokenizer_test regex_parser_test regex_nfa_test regex_dfa_test regex_hopcroft_test regex_matcher_test regex_capture_test regex_api_test regex_posix_test benchmark regex_grep_test
+install(TARGETS regex_engine regex_tokenizer_test regex_parser_test regex_nfa_test regex_dfa_test regex_hopcroft_test regex_matcher_test regex_capture_test regex_api_test regex_posix_test benchmark regex_grep_test test_runner
     RUNTIME DESTINATION bin
 )
 install(DIRECTORY include/
@@ -162,6 +166,14 @@ add_custom_target(run_grep_tests
     DEPENDS regex_grep_test
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     COMMENT "Running complete Grep test suite (377+ test cases)..."
+)
+
+# ---------- 自定义目标：运行测试框架 ----------
+add_custom_target(run_test_runner
+    COMMAND $<TARGET_FILE:test_runner>
+    DEPENDS test_runner regex_tokenizer_test regex_parser_test regex_nfa_test regex_dfa_test regex_hopcroft_test regex_matcher_test regex_capture_test regex_api_test regex_posix_test regex_grep_test
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMENT "Running complete test suite via test_runner..."
 )
 
 # ---------- 信息输出 ----------
