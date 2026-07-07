@@ -149,11 +149,19 @@ add_custom_target(run_tests
 
 # ---------- 自定义目标：运行 Grep 测试 ----------
 add_custom_target(run_grep_tests
-    COMMAND $<TARGET_FILE:regex_grep_test> ${CMAKE_SOURCE_DIR}/tests/grep_tests/basic.txt
-    COMMAND $<TARGET_FILE:regex_grep_test> ${CMAKE_SOURCE_DIR}/tests/grep_tests/quantifiers.txt
+    COMMAND $<TARGET_FILE:regex_grep_test>
+        ${CMAKE_SOURCE_DIR}/tests/grep_tests/basic.txt
+        ${CMAKE_SOURCE_DIR}/tests/grep_tests/literals.txt
+        ${CMAKE_SOURCE_DIR}/tests/grep_tests/quantifiers.txt
+        ${CMAKE_SOURCE_DIR}/tests/grep_tests/character_classes.txt
+        ${CMAKE_SOURCE_DIR}/tests/grep_tests/dot.txt
+        ${CMAKE_SOURCE_DIR}/tests/grep_tests/anchors.txt
+        ${CMAKE_SOURCE_DIR}/tests/grep_tests/groups.txt
+        ${CMAKE_SOURCE_DIR}/tests/grep_tests/escape.txt
+        ${CMAKE_SOURCE_DIR}/tests/grep_tests/complex.txt
     DEPENDS regex_grep_test
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMENT "Running Grep test suite..."
+    COMMENT "Running complete Grep test suite (377+ test cases)..."
 )
 
 # ---------- 信息输出 ----------
