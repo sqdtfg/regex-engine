@@ -1,0 +1,40 @@
+# Basic regex patterns
+# Format: pattern text expected_result [expected_start] [expected_end]
+
+# Simple literals
+abc abc 1 0 3
+abc abcd 1 0 3
+abc xabcx 1 1 4
+abc xyz 0
+
+# Quantifiers
+a* aa 1 0 2
+a* a 1 0 1
+a* b 1 0 0
+a+ aa 1 0 2
+a+ a 1 0 1
+a+ b 0
+a? a 1 0 1
+a? b 1 0 0
+
+# Alternation
+a|b a 1 0 1
+a|b b 1 0 1
+a|b c 0
+a|b|c c 1 0 1
+
+# Character classes
+[abc] a 1 0 1
+[abc] b 1 0 1
+[abc] d 0
+[^abc] d 1 0 1
+[^abc] a 0
+[a-z] x 1 0 1
+[a-z] 5 0
+[A-Z] X 1 0 1
+[0-9] 5 1 0 1
+
+# Dot
+. a 1 0 1
+. b 1 0 1
+. 0 1 0 1
