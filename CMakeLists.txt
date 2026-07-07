@@ -110,9 +110,9 @@ target_link_libraries(regex_api_test PRIVATE regex_core)
 add_executable(regex_posix_test tests/test_posix_compat.c)
 target_link_libraries(regex_posix_test PRIVATE regex_core)
 
-# 12) regex_benchmark — 性能基准测试
-add_executable(regex_benchmark tests/test_benchmark.c)
-target_link_libraries(regex_benchmark PRIVATE regex_core)
+# 12) benchmark — 性能基准测试（含 POSIX regex.h 对比）
+add_executable(benchmark tests/benchmark.c)
+target_link_libraries(benchmark PRIVATE regex_core)
 
 # ---------- 安装 ----------
 install(TARGETS regex_core
