@@ -1,0 +1,97 @@
+# Anchor Tests - 锚点测试 (^ and $)
+# Format: pattern text expected_result [expected_start] [expected_end]
+
+# Start anchor ^
+^abc abc 1 0 3
+^abc abcd 1 0 3
+^abc xabc 0
+^abc xyzabc 0
+^abc abcxyz 1 0 3
+
+# End anchor $
+abc$ abc 1 0 3
+abc$ xabc 1 1 4
+abc$ abcd 0
+abc$ abcxyz 0
+abc$ xyzabc 1 3 6
+
+# Both anchors ^ and $
+^abc$ abc 1 0 3
+^abc$ abcd 0
+^abc$ xabc 0
+^abc$ abcxyz 0
+^abc$ ab 0
+^abc$ abce 0
+
+# Single character anchors
+^a$ a 1 0 1
+^a$ aa 0
+^a$ ab 0
+^a$ ba 0
+^a$ a 1 0 1
+
+# Empty string anchors
+^$ 1 0 0
+^$ a 0
+^$ ab 0
+
+# Anchor edge cases
+^abc abc 1 0 3
+abc$ abc 1 0 3
+^abc$ abc 1 0 3
+
+# Anchor with quantifiers
+^a*$ 1 0 0
+^a*$ a 1 0 1
+^a*$ aa 1 0 2
+^a*$ aaa 1 0 3
+^a*$ ab 0
+
+^a+$ a 1 0 1
+^a+$ aa 1 0 2
+^a+$ 0
+
+^a?$ 1 0 0
+^a?$ a 1 0 1
+^a?$ aa 0
+
+# Anchor with character classes
+^[0-9]+$ 123 1 0 3
+^[0-9]+$ 123a 0
+^[0-9]+$ a123 0
+^[0-9]+$ abc 0
+
+^[a-z]+$ hello 1 0 5
+^[a-z]+$ Hello 0
+^[a-z]+$ hello123 0
+^[a-z]+$ 123hello 0
+
+# Anchor with alternation
+^(abc|def)$ abc 1 0 3
+^(abc|def)$ def 1 0 3
+^(abc|def)$ abcdef 0
+^(abc|def)$ aabc 0
+^(abc|def)$ abcd 0
+
+# Complex anchor patterns
+^[a-z][0-9]$ a1 1 0 2
+^[a-z][0-9]$ b2 1 0 2
+^[a-z][0-9]$ a 0
+^[a-z][0-9]$ 1 0
+^[a-z][0-9]$ a12 0
+^[a-z][0-9]$ aa1 0
+
+# Anchors in the middle (should be treated as literal?)
+a^bc abc 0  # ^ in middle is not an anchor
+a$bc abc 0  # $ in middle is not an anchor
+
+# Anchor with dot
+^.*$ anytext 1 0 7
+^.*$ 1 0 0
+^.+$ anytext 1 0 7
+^.+$ 0
+
+# Anchors with multiple groups
+^(abc)(def)$ abcdef 1 0 6
+^(abc)(def)$ abcdefg 0
+^(abc)(def)$ xabcdef 0
