@@ -1,0 +1,173 @@
+# Escape Sequence Tests - 转义序列测试
+# Format: pattern text expected_result [expected_start] [expected_end]
+
+# Basic escaped special characters
+\. . 1 0 1
+\. a 0
+\. 123.456 1 3 4
+
+\* * 1 0 1
+\* a 0
+\* a*b 1 1 2
+
+\+ + 1 0 1
+\+ a 0
+\+ a+b 1 1 2
+
+\? ? 1 0 1
+\? a 0
+\? a?b 1 1 2
+
+\( ( 1 0 1
+\( a 0
+\( (abc) 1 0 1
+
+\) ) 1 0 1
+\) a 0
+\) (abc) 1 4 5
+
+\[ [ 1 0 1
+\[ a 0
+\[ [abc] 1 0 1
+
+\] ] 1 0 1
+\] a 0
+\] [abc] 1 4 5
+
+\\ \ 1 0 1
+\\ a 0
+\\ a\b 1 1 2
+
+\^ ^ 1 0 1
+\^ a 0
+\^ ^abc 1 0 1
+
+\$ $ 1 0 1
+\$ a 0
+\$ abc$ 1 3 4
+
+\| | 1 0 1
+\| a 0
+\| a|b 1 1 2
+
+\{ { 1 0 1
+\{ a 0
+\{ {a} 1 0 1
+
+\} } 1 0 1
+\} a 0
+\} {a} 1 2 3
+
+# Digit character class
+\d 0 1 0 1
+\d 1 1 0 1
+\d 5 1 0 1
+\d 9 1 0 1
+\d a 0
+\d abc123def 1 3 4
+\d 0 1 0 1
+\d 9 1 0 1
+\d 000 1 0 1
+
+# Word character class
+\w a 1 0 1
+\w z 1 0 1
+\w A 1 0 1
+\w Z 1 0 1
+\w 0 1 0 1
+\w 9 1 0 1
+\w _ 1 0 1
+\w ! 0
+\w @ 0
+\w # 0
+\w $ 0
+\w % 0
+\w ^ 0
+\w & 0
+\w * 0
+\w ( 0
+\w ) 0
+\w - 0
+
+# Whitespace character class
+\s space 1 0 1
+\s tab 1 0 1
+\s newline 1 0 1
+\s carriage_return 1 0 1
+\s a 0
+\s ! 0
+\s @ 0
+\s 1 0
+
+# Negated character classes
+\D a 1 0 1
+\D ! 1 0 1
+\D @ 1 0 1
+\D 0 0
+\D 5 0
+\D 9 0
+
+\W ! 1 0 1
+\W @ 1 0 1
+\W # 1 0 1
+\W a 0
+\W z 0
+\W A 0
+\W Z 0
+\W 0 0
+\W 9 0
+\W _ 0
+
+\S a 1 0 1
+\S ! 1 0 1
+\S @ 1 0 1
+\S space 0
+\S tab 0
+\S newline 0
+
+# Escape sequences with quantifiers
+\d+ 123 1 0 3
+\d+ abc123def 1 3 6
+\d+ abc 0
+
+\w+ hello 1 0 5
+\w+ hello_world_123 1 0 13
+\w+ !@# 0
+
+\s+   1 0 3
+\s+ a 0
+\s+ a b c 1 1 2
+
+# Complex patterns with escape sequences
+\d{3}-\d{4} 123-4567 1 0 8
+\d{3}-\d{4} 12-345 0
+\d{3}-\d{4} 1234-567 0
+
+\w+@\w+\.\w+ user@example.com 1 0 15
+\w+@\w+\.\w+ user@ 0
+\w+@\w+\.\w+ @example.com 0
+\w+@\w+\.\w+ user@example 0
+
+# Mixed patterns
+abc\def abcdef 1 0 6
+abc\def abcdef 1 0 6
+abc\def abcXef 0
+
+a\.b a.b 1 0 3
+a\.b axb 0
+
+\d+\.\d+ 123.456 1 0 7
+\d+\.\d+ 123456 0
+\d+\.\d+ .123 0
+\d+\.\d+ 123. 0
+
+# Escaped character in character classes
+[\.] . 1 0 1
+[\.] a 0
+
+[\*] * 1 0 1
+[\*] a 0
+
+[0-9\-] 5 1 0 1
+[0-9\-] - 1 0 1
+[0-9\-] a 0
