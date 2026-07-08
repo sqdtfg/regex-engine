@@ -66,7 +66,7 @@ static Token parse_escape(Tokenizer *tok) {
     }
 
     if (c == '\0') {
-        return make_error(tok, "转义序列不完整");
+        return make_error(tok, "Incomplete escape sequence");
     }
 
     return t;
@@ -163,7 +163,7 @@ static Token parse_curly(Tokenizer *tok) {
     }
 
     if (!has_digit) {
-        return make_error(tok, "{ 后缺少数字");
+        return make_error(tok, "Missing digit after {");
     }
 
     t.curly.min = (int)min_val;
@@ -216,7 +216,7 @@ Token tokenizer_next(Tokenizer *tok) {
 
     /* 已有错误 → 持续返回错误 */
     if (tok->error_code) {
-        return make_error(tok, "tokenizer 处于错误状态");
+        return make_error(tok, "tokenizer in error state");
     }
 
     /* 输入结束 */
@@ -258,21 +258,21 @@ Token tokenizer_next(Tokenizer *tok) {
 
 const char *token_to_string(Token tok) {
     switch (tok.type) {
-        case TOK_CHAR:          return "普通字符";
-        case TOK_ESCAPE:        return "转义序列";
-        case TOK_DOT:           return "点号 .";
-        case TOK_BRACKET:       return "字符集合 [...]";
-        case TOK_STAR:          return "星号 *";
-        case TOK_PLUS:          return "加号 +";
-        case TOK_QUESTION:      return "问号 ?";
-        case TOK_CURLY:         return "量词 {m,n}";
-        case TOK_LPAREN:        return "左括号 (";
-        case TOK_RPAREN:        return "右括号 )";
-        case TOK_PIPE:          return "竖线 |";
-        case TOK_CARET:         return "脱字符 ^";
-        case TOK_DOLLAR:        return "美元符 $";
-        case TOK_EOF:           return "输入结束";
-        case TOK_ERROR:         return "词法错误";
-        default:                return "未知类型";
+        case TOK_CHAR:          return "char";
+        case TOK_ESCAPE:        return "escape";
+        case TOK_DOT:           return "dot (.)";
+        case TOK_BRACKET:       return "bracket [...]";
+        case TOK_STAR:          return "star (*)";
+        case TOK_PLUS:          return "plus (+)";
+        case TOK_QUESTION:      return "question (?)";
+        case TOK_CURLY:         return "curly {m,n}";
+        case TOK_LPAREN:        return "lparen ((";
+        case TOK_RPAREN:        return "rparen ())";
+        case TOK_PIPE:          return "pipe (|)";
+        case TOK_CARET:         return "caret (^)";
+        case TOK_DOLLAR:        return "dollar ($)";
+        case TOK_EOF:           return "EOF";
+        case TOK_ERROR:         return "error";
+        default:                return "unknown";
     }
 }

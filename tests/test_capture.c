@@ -39,9 +39,9 @@ static void module_begin(const char *name) {
 static void module_end(void) {
     printf("--------------------------------------------------\n");
     if (g_module_failures == 0) {
-        printf("  结果：全部通过 (%d 项)\n", g_module_passes);
+        printf("  结果：all passed (%d tests)\n", g_module_passes);
     } else {
-        printf("  结果：通过 %d 项，失败 %d 项\n", g_module_passes, g_module_failures);
+        printf("  结果：passed %d, failed %d\n", g_module_passes, g_module_failures);
     }
 }
 
@@ -52,7 +52,7 @@ static void check_pass(const char *desc) {
 }
 
 static void check_fail(const char *desc, const char *expected, const char *actual) {
-    printf("  FAIL: %s — 期望「%s」，实际「%s」\n", desc, expected, actual);
+    printf("  FAIL: %s — expected '%s', got '%s'\n", desc, expected, actual);
     g_failures++;
     g_module_failures++;
 }
@@ -100,24 +100,24 @@ static void test_simple_group(void) {
     DFAMachine dfa = build_with_groups("(abc)");
     CapturedMatch result;
 
-    CHECK_TRUE(dfa.states != NULL, "group: DFA states 非 NULL");
+    CHECK_TRUE(dfa.states != NULL, "group: DFA states not NULL");
 
     result = dfa_match_captured(&dfa, "xyzabc123");
-    CHECK_TRUE(result.matched, "group: 匹配成功");
-    CHECK_SIZE_T_EQ(3, result.start, "group: 完整匹配起点 3");
-    CHECK_SIZE_T_EQ(6, result.end, "group: 完整匹配终点 6");
-    CHECK_SIZE_T_EQ(3, result.length, "group: 完整匹配长度 3");
-    CHECK_INT_EQ(1, result.group_count, "group: 1 个捕获组");
+    CHECK_TRUE(result.matched, "group: match succeeded");
+    CHECK_SIZE_T_EQ(3, result.start, "group: full match start 3");
+    CHECK_SIZE_T_EQ(6, result.end, "group: full match end 6");
+    CHECK_SIZE_T_EQ(3, result.length, "group: full match length 3");
+    CHECK_INT_EQ(1, result.group_count, "group: 1 capture group");
 
     if (result.groups) {
-        CHECK_TRUE(result.groups[0].matched, "group: 第 0 组匹配");
-        CHECK_SIZE_T_EQ(3, result.groups[0].start, "group: 第 0 组起点 3");
-        CHECK_SIZE_T_EQ(6, result.groups[0].end, "group: 第 0 组终点 6");
+        CHECK_TRUE(result.groups[0].matched, "group: group 0 matched");
+        CHECK_SIZE_T_EQ(3, result.groups[0].start, "group: group 0 start 3");
+        CHECK_SIZE_T_EQ(6, result.groups[0].end, "group: group 0 end 6");
 
-        CHECK_TRUE(result.groups[1].matched, "group: 第 1 组匹配");
-        CHECK_SIZE_T_EQ(3, result.groups[1].start, "group: 第 1 组起点 3");
-        CHECK_SIZE_T_EQ(6, result.groups[1].end, "group: 第 1 组终点 6");
-        CHECK_SIZE_T_EQ(3, result.groups[1].length, "group: 第 1 组长度 3");
+        CHECK_TRUE(result.groups[1].matched, "group: group 1 matched");
+        CHECK_SIZE_T_EQ(3, result.groups[1].start, "group: group 1 start 3");
+        CHECK_SIZE_T_EQ(6, result.groups[1].end, "group: group 1 end 6");
+        CHECK_SIZE_T_EQ(3, result.groups[1].length, "group: group 1 length 3");
     }
 
     captured_match_free(&result);
@@ -129,11 +129,11 @@ static void test_no_group(void) {
     CapturedMatch result;
 
     result = dfa_match_captured(&dfa, "abc");
-    CHECK_TRUE(result.matched, "no-group: 匹配成功");
-    CHECK_INT_EQ(0, result.group_count, "no-group: 0 个捕获组");
+    CHECK_TRUE(result.matched, "no-group: match succeeded");
+    CHECK_INT_EQ(0, result.group_count, "no-group: 0 capture groups");
 
     if (result.groups) {
-        CHECK_TRUE(result.groups[0].matched, "no-group: 第 0 组匹配");
+        CHECK_TRUE(result.groups[0].matched, "no-group: group 0 matched");
     }
 
     captured_match_free(&result);
@@ -145,12 +145,12 @@ static void test_group_with_alter(void) {
     CapturedMatch result;
 
     result = dfa_match_captured(&dfa, "the cat sat");
-    CHECK_TRUE(result.matched, "alter: 匹配成功");
-    CHECK_INT_EQ(1, result.group_count, "alter: 1 个捕获组");
+    CHECK_TRUE(result.matched, "alter: match succeeded");
+    CHECK_INT_EQ(1, result.group_count, "alter: 1 capture group");
 
     if (result.groups && result.groups[1].matched) {
-        CHECK_SIZE_T_EQ(4, result.groups[1].start, "alter: cat 起点 4");
-        CHECK_SIZE_T_EQ(7, result.groups[1].end, "alter: cat 终点 7");
+        CHECK_SIZE_T_EQ(4, result.groups[1].start, "alter: cat start 4");
+        CHECK_SIZE_T_EQ(7, result.groups[1].end, "alter: cat end 7");
     }
 
     captured_match_free(&result);
@@ -166,19 +166,19 @@ static void test_nested_groups(void) {
     CapturedMatch result;
 
     result = dfa_match_captured(&dfa, "xxabcdzz");
-    CHECK_TRUE(result.matched, "nested: 匹配成功");
-    CHECK_INT_EQ(3, result.group_count, "nested: 3 个捕获组");
+    CHECK_TRUE(result.matched, "nested: match succeeded");
+    CHECK_INT_EQ(3, result.group_count, "nested: 3 capture groups");
 
     if (result.groups) {
-        /* 第 0 组：完整匹配 "abcd" */
-        CHECK_TRUE(result.groups[0].matched, "nested: 第 0 组匹配");
-        CHECK_SIZE_T_EQ(2, result.groups[0].start, "nested: 第 0 组起点 2");
-        CHECK_SIZE_T_EQ(6, result.groups[0].end, "nested: 第 0 组终点 6");
+        /* Group 0: full match "abcd" */
+        CHECK_TRUE(result.groups[0].matched, "nested: group 0 matched");
+        CHECK_SIZE_T_EQ(2, result.groups[0].start, "nested: group 0 start 2");
+        CHECK_SIZE_T_EQ(6, result.groups[0].end, "nested: group 0 end 6");
 
-        /* 第 1 组：((ab)(cd)) 整体 */
-        CHECK_TRUE(result.groups[1].matched, "nested: 第 1 组匹配");
-        CHECK_SIZE_T_EQ(2, result.groups[1].start, "nested: 第 1 组起点 2");
-        CHECK_SIZE_T_EQ(6, result.groups[1].end, "nested: 第 1 组终点 6");
+        /* Group 1: ((ab)(cd)) overall */
+        CHECK_TRUE(result.groups[1].matched, "nested: group 1 matched");
+        CHECK_SIZE_T_EQ(2, result.groups[1].start, "nested: group 1 start 2");
+        CHECK_SIZE_T_EQ(6, result.groups[1].end, "nested: group 1 end 6");
     }
 
     captured_match_free(&result);
@@ -190,11 +190,11 @@ static void test_repeated_group(void) {
     CapturedMatch result;
 
     result = dfa_match_captured(&dfa, "xxxaaaayyy");
-    CHECK_TRUE(result.matched, "repeated: 匹配成功");
+    CHECK_TRUE(result.matched, "repeated: match succeeded");
 
     if (result.groups && result.groups[1].matched) {
-        CHECK_SIZE_T_EQ(3, result.groups[1].start, "repeated: a+ 起点 3");
-        CHECK_SIZE_T_EQ(7, result.groups[1].end, "repeated: a+ 终点 7");
+        CHECK_SIZE_T_EQ(3, result.groups[1].start, "repeated: a+ start 3");
+        CHECK_SIZE_T_EQ(7, result.groups[1].end, "repeated: a+ end 7");
     }
 
     captured_match_free(&result);
@@ -206,7 +206,7 @@ static void test_group_no_match(void) {
     CapturedMatch result;
 
     result = dfa_match_captured(&dfa, "xyz");
-    CHECK_FALSE(result.matched, "nomatch: 不匹配时 matched=0");
+    CHECK_FALSE(result.matched, "nomatch: not matched");
     CHECK_INT_EQ(0, result.group_count, "nomatch: group_count=0");
 
     captured_match_free(&result);
@@ -224,7 +224,7 @@ static void test_star_group(void) {
     result = dfa_match_captured(&dfa, "bbb");
     /* a* 可匹配空串 */
     if (result.matched && result.groups && result.groups[1].matched) {
-        CHECK_SIZE_T_EQ(0, result.groups[1].length, "star: a* 空匹配长度 0");
+        CHECK_SIZE_T_EQ(0, result.groups[1].length, "star: a* empty match length 0");
     }
 
     captured_match_free(&result);
@@ -236,7 +236,7 @@ static void test_optional_group(void) {
     CapturedMatch result;
 
     result = dfa_match_captured(&dfa, "xc");
-    CHECK_TRUE(result.matched, "opt: 'c' 匹配 (ab)?c");
+    CHECK_TRUE(result.matched, "opt: 'c' matches (ab)?c");
 
     captured_match_free(&result);
     dfa_capture_free(&dfa);
@@ -252,24 +252,24 @@ static void test_free_safety(void) {
 
     result = dfa_match_captured(&dfa, "abc");
     captured_match_free(&result);
-    check_pass("free: captured_match_free 正常");
+    check_pass("free: captured_match_free OK");
 
     dfa_capture_free(&dfa);
-    check_pass("free: dfa_capture_free 正常");
+    check_pass("free: dfa_capture_free OK");
 }
 
 static void test_null_safety(void) {
     CapturedMatch result = {0};
     captured_match_free(NULL);
-    check_pass("null: captured_match_free(NULL) 安全");
+    check_pass("null: captured_match_free(NULL) safe");
 
     result = dfa_match_captured(NULL, "abc");
-    CHECK_FALSE(result.matched, "null: dfa_match_captured(NULL) 返回未匹配");
-    check_pass("null: 无崩溃");
+    CHECK_FALSE(result.matched, "null: dfa_match_captured(NULL) returns no match");
+    check_pass("null: no crash");
 
     DFAMachine dfa = build_with_groups("(abc)");
     result = dfa_match_captured(&dfa, NULL);
-    CHECK_FALSE(result.matched, "null: text=NULL 返回未匹配");
+    CHECK_FALSE(result.matched, "null: text=NULL returns no match");
     dfa_capture_free(&dfa);
 }
 
@@ -281,9 +281,9 @@ static void test_groups_pointer(void) {
     DFAMachine dfa = build_with_groups("abc");
     CapturedMatch result = dfa_match_captured(&dfa, "abc");
 
-    /* 无捕获组时，groups 应为 NULL（calloc 在 group_count=0 时分配 1 个元素） */
-    CHECK_TRUE(result.groups != NULL, "groups: 即使 0 组也分配了 groups[0]");
-    CHECK_TRUE(result.groups[0].matched, "groups: 第 0 组总是有效");
+    /* No capture groups: groups allocated with 1 element (group 0) */
+    CHECK_TRUE(result.groups != NULL, "groups: groups[0] allocated even with 0 groups");
+    CHECK_TRUE(result.groups[0].matched, "groups: group 0 always valid");
 
     captured_match_free(&result);
     dfa_free(&dfa);
@@ -303,31 +303,31 @@ int main(void) {
     setvbuf(stderr, NULL, _IONBF, 0);
 
     printf("==================================================\n");
-    printf("  捕获组 单元测试\n");
+    printf("  Test capture groups unit test\n");
     printf("==================================================\n");
 
     /* ---- 基础捕获组 ---- */
-    module_begin("基础捕获组");
+    module_begin("Basic capture groups");
     test_simple_group();
     test_no_group();
     test_group_with_alter();
     module_end();
 
     /* ---- 嵌套与重复 ---- */
-    module_begin("嵌套与重复捕获组");
+    module_begin("Nested & repeated groups");
     test_nested_groups();
     test_repeated_group();
     test_group_no_match();
     module_end();
 
     /* ---- 量词与捕获组组合 ---- */
-    module_begin("量词与捕获组组合");
+    module_begin("Quantifiers & groups");
     test_star_group();
     test_optional_group();
     module_end();
 
     /* ---- 释放安全性 ---- */
-    module_begin("释放安全性");
+    module_begin("Free safety");
     test_free_safety();
     test_null_safety();
     test_groups_pointer();
@@ -336,14 +336,14 @@ int main(void) {
     /* ---- 总结果 ---- */
     printf("\n==================================================\n");
     if (g_failures == 0) {
-        printf("  测试全部通过！\n");
+        printf("  All tests passed!\n");
     } else {
-        printf("  测试存在失败\n");
+        printf("  Some tests failed\n");
     }
-    printf("  总计: %3d 项\n", g_passes + g_failures);
-    printf("  通过: %3d 项\n", g_passes);
+    printf("  Total: %3d\n", g_passes + g_failures);
+    printf("  Passed: %3d\n", g_passes);
     if (g_failures > 0) {
-        printf("  失败: %3d 项\n", g_failures);
+        printf("  Failed: %3d\n", g_failures);
     }
     printf("==================================================\n");
 
