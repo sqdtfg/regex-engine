@@ -387,54 +387,54 @@ static void test_token_to_string(void) {
 
     /* 已覆盖的类型 */
     t = (Token){ .type = TOK_CHAR };
-    CHECK_STR("普通字符", token_to_string(t), "TOK_CHAR → 中文名");
+    CHECK_STR("char", token_to_string(t), "TOK_CHAR -> English name");
 
     t = (Token){ .type = TOK_EOF };
-    CHECK_STR("输入结束", token_to_string(t), "TOK_EOF → 中文名");
+    CHECK_STR("EOF", token_to_string(t), "TOK_EOF -> English name");
 
     t = (Token){ .type = TOK_ERROR };
-    CHECK_STR("词法错误", token_to_string(t), "TOK_ERROR → 中文名");
+    CHECK_STR("error", token_to_string(t), "TOK_ERROR -> English name");
 
-    /* 新增：其余所有枚举值 */
+    /* remaining enum values */
     t = (Token){ .type = TOK_ESCAPE };
-    CHECK_STR("转义序列", token_to_string(t), "TOK_ESCAPE → 中文名");
+    CHECK_STR("escape", token_to_string(t), "TOK_ESCAPE -> English name");
 
     t = (Token){ .type = TOK_DOT };
-    CHECK_STR("点号 .", token_to_string(t), "TOK_DOT → 中文名");
+    CHECK_STR("dot (.)", token_to_string(t), "TOK_DOT -> English name");
 
     t = (Token){ .type = TOK_BRACKET };
-    CHECK_STR("字符集合 [...]", token_to_string(t), "TOK_BRACKET → 中文名");
+    CHECK_STR("bracket [...]", token_to_string(t), "TOK_BRACKET -> English name");
 
     t = (Token){ .type = TOK_STAR };
-    CHECK_STR("星号 *", token_to_string(t), "TOK_STAR → 中文名");
+    CHECK_STR("star (*)", token_to_string(t), "TOK_STAR -> English name");
 
     t = (Token){ .type = TOK_PLUS };
-    CHECK_STR("加号 +", token_to_string(t), "TOK_PLUS → 中文名");
+    CHECK_STR("plus (+)", token_to_string(t), "TOK_PLUS -> English name");
 
     t = (Token){ .type = TOK_QUESTION };
-    CHECK_STR("问号 ?", token_to_string(t), "TOK_QUESTION → 中文名");
+    CHECK_STR("question (?)", token_to_string(t), "TOK_QUESTION -> English name");
 
     t = (Token){ .type = TOK_CURLY };
-    CHECK_STR("量词 {m,n}", token_to_string(t), "TOK_CURLY → 中文名");
+    CHECK_STR("curly {m,n}", token_to_string(t), "TOK_CURLY -> English name");
 
     t = (Token){ .type = TOK_LPAREN };
-    CHECK_STR("左括号 (", token_to_string(t), "TOK_LPAREN → 中文名");
+    CHECK_STR("lparen ((", token_to_string(t), "TOK_LPAREN -> English name");
 
     t = (Token){ .type = TOK_RPAREN };
-    CHECK_STR("右括号 )", token_to_string(t), "TOK_RPAREN → 中文名");
+    CHECK_STR("rparen ())", token_to_string(t), "TOK_RPAREN -> English name");
 
     t = (Token){ .type = TOK_PIPE };
-    CHECK_STR("竖线 |", token_to_string(t), "TOK_PIPE → 中文名");
+    CHECK_STR("pipe (|)", token_to_string(t), "TOK_PIPE -> English name");
 
     t = (Token){ .type = TOK_CARET };
-    CHECK_STR("脱字符 ^", token_to_string(t), "TOK_CARET → 中文名");
+    CHECK_STR("caret (^)", token_to_string(t), "TOK_CARET -> English name");
 
     t = (Token){ .type = TOK_DOLLAR };
-    CHECK_STR("美元符 $", token_to_string(t), "TOK_DOLLAR → 中文名");
+    CHECK_STR("dollar ($)", token_to_string(t), "TOK_DOLLAR -> English name");
 
-    /* 非法类型 */
+    /* illegal type */
     t = (Token){ .type = (RegexTokenType)-1 };
-    CHECK_STR("未知类型", token_to_string(t), "非法类型 → 中文名");
+    CHECK_STR("unknown", token_to_string(t), "illegal type -> English name");
 }
 
 /* --- 错误恢复 --- */
