@@ -113,10 +113,12 @@ target_link_libraries(regex_posix_test PRIVATE regex_core)
 # 12) benchmark — 性能基准测试（含 POSIX regex.h 对比）
 add_executable(benchmark tests/benchmark.c)
 target_link_libraries(benchmark PRIVATE regex_core ${CMAKE_DL_LIBS})
-# MinGW gnurx: regex.h lives in /opt/include, lib in /opt/lib
-target_include_directories(benchmark PRIVATE "D:/mingw64/opt/include")
-target_link_directories(benchmark PRIVATE "D:/mingw64/opt/lib")
-target_link_libraries(benchmark PRIVATE gnurx)
+if(MINGW)
+    # MinGW gnurx: regex.h lives in /opt/include, lib in /opt/lib
+    target_include_directories(benchmark PRIVATE "D:/mingw64/opt/include")
+    target_link_directories(benchmark PRIVATE "D:/mingw64/opt/lib")
+    target_link_libraries(benchmark PRIVATE gnurx)
+endif()
 
 # 13) regex_grep_test — Grep 测试集适配
 add_executable(regex_grep_test tests/test_grep.c)

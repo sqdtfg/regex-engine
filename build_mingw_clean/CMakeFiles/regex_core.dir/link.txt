@@ -1,0 +1,2 @@
+D:\mingw64\bin\ar.exe qc lib\libregex_core.a CMakeFiles/regex_core.dir/src/api.c.obj CMakeFiles/regex_core.dir/src/capture.c.obj CMakeFiles/regex_core.dir/src/dfa.c.obj CMakeFiles/regex_core.dir/src/hopcroft.c.obj CMakeFiles/regex_core.dir/src/main.c.obj CMakeFiles/regex_core.dir/src/matcher.c.obj CMakeFiles/regex_core.dir/src/nfa.c.obj CMakeFiles/regex_core.dir/src/parser.c.obj CMakeFiles/regex_core.dir/src/posix_compat.c.obj CMakeFiles/regex_core.dir/src/tokenizer.c.obj
+D:\mingw64\bin\ranlib.exe lib\libregex_core.a

@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"E:/regex-engine/build_mingw_clean/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
