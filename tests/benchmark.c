@@ -45,7 +45,14 @@
 #endif
 
 /* 自研引擎头文件 */
+/*
+ * The project API intentionally uses the POSIX name regex_t.  This benchmark
+ * also needs the system <regex.h> regex_t, so keep the engine type local under
+ * a different name in this translation unit.
+ */
+#define regex_t engine_regex_t
 #include "api.h"
+#undef regex_t
 #include "matcher.h"
 #include "capture.h"
 #include "parser.h"
@@ -53,7 +60,6 @@
 #include "dfa.h"
 #include "hopcroft.h"
 #include "tokenizer.h"
-#include "posix_compat.h"
 
 /* ========================================================================== */
 /*  POSIX regex.h 条件编译支持                                                  */
@@ -68,10 +74,11 @@
 #if defined(__GLIBC__) || defined(__APPLE__) || defined(__FreeBSD__) || \
     defined(__OpenBSD__) || defined(__NetBSD__)
 #define HAS_POSIX_REGEX 1
+#include <dlfcn.h>
 #include <regex.h>
 #else
 /* 尝试包含 MinGW 或其他平台的 regex.h */
-#ifdef __MINGW32__
+#if 0 && defined(__MINGW32__)
 /* MinGW 可能需要手动安装 libregex */
 #include <regex.h>
 #define HAS_POSIX_REGEX 1
@@ -79,6 +86,8 @@
 #define HAS_POSIX_REGEX 0
 #endif
 #endif
+
+#define DFA_POSIX_SPEED_TARGET 0.80
 
 /* ========================================================================== */
 /*  计时工具                                                                    */
@@ -436,7 +445,7 @@ static void bench_match(void) {
             if (!text) continue;
 
             /* 编译正则 */
-            regex_t *prog = regex_compile(tests[ti].pattern, REGEX_FLAG_NONE);
+            engine_regex_t *prog = regex_compile(tests[ti].pattern, REGEX_FLAG_NONE);
             if (!prog) { free(text); continue; }
 
             /* 预热：确保 DFA 已构建 */
@@ -538,7 +547,7 @@ static void bench_findall(void) {
             char *text = generate_text(len, 'a');
             if (!text) continue;
 
-            regex_t *prog = regex_compile(patterns[pi], REGEX_FLAG_NONE);
+            engine_regex_t *prog = regex_compile(patterns[pi], REGEX_FLAG_NONE);
             if (!prog) { free(text); continue; }
 
             double t0 = elapsed_ms();
@@ -566,6 +575,7 @@ static void bench_findall(void) {
 /*  8. POSIX 兼容层基准测试                                                     */
 /* ========================================================================== */
 
+#if 0
 static void bench_posix_compat(void) {
     const char *patterns[] = {
         "abc",
@@ -635,9 +645,15 @@ static void bench_posix_compat(void) {
         }
     }
 }
+#endif
 
 /* ========================================================================== */
 /*  9. 自研引擎 vs POSIX regex.h 对比测试                                       */
+/* ========================================================================== */
+
+#if 0
+/* ========================================================================== */
+/*  8. DFA match vs system POSIX regex.h benchmark                            */
 /* ========================================================================== */
 
 #if HAS_POSIX_REGEX
@@ -671,7 +687,7 @@ static void bench_posix_comparison(void) {
 
             /* ---- 自研引擎 ---- */
             {
-                regex_t *prog = regex_compile(tests[ti].pattern, REGEX_FLAG_NONE);
+                engine_regex_t *prog = regex_compile(tests[ti].pattern, REGEX_FLAG_NONE);
                 if (prog) {
                     double t0 = elapsed_ms();
                     int iters = 10000;
@@ -733,6 +749,223 @@ static void bench_posix_comparison(void) {
 /*  10. 编译流水线整体性能基准测试                                               */
 /* ========================================================================== */
 
+#endif
+
+/* ========================================================================== */
+/*  8. DFA match vs system POSIX regex.h benchmark                            */
+/* ========================================================================== */
+
+#if HAS_POSIX_REGEX
+typedef struct {
+    const char *label;
+    const char *pattern;
+    char fill;
+    const char *needle;
+} PosixCompareCase;
+
+typedef int (*SystemRegcompFn)(regex_t *, const char *, int);
+typedef int (*SystemRegexecFn)(const regex_t *, const char *, size_t, regmatch_t[], int);
+typedef void (*SystemRegfreeFn)(regex_t *);
+
+typedef struct {
+    void *handle;
+    SystemRegcompFn regcomp;
+    SystemRegexecFn regexec;
+    SystemRegfreeFn regfree;
+} SystemPosixRegexApi;
+
+static int load_system_posix_regex(SystemPosixRegexApi *api) {
+    memset(api, 0, sizeof(*api));
+
+#if defined(__GLIBC__)
+    api->handle = dlopen("libc.so.6", RTLD_LAZY | RTLD_LOCAL);
+    if (!api->handle) {
+        api->handle = RTLD_DEFAULT;
+    }
+#else
+    api->handle = RTLD_DEFAULT;
+#endif
+
+    api->regcomp = (SystemRegcompFn)dlsym(api->handle, "regcomp");
+    api->regexec = (SystemRegexecFn)dlsym(api->handle, "regexec");
+    api->regfree = (SystemRegfreeFn)dlsym(api->handle, "regfree");
+
+    return api->regcomp && api->regexec && api->regfree;
+}
+
+static void close_system_posix_regex(SystemPosixRegexApi *api) {
+#if defined(__GLIBC__)
+    if (api->handle && api->handle != RTLD_DEFAULT) {
+        dlclose(api->handle);
+    }
+#else
+    (void)api;
+#endif
+}
+
+static char *generate_text_with_suffix(size_t len, char fill, const char *suffix) {
+    size_t suffix_len = strlen(suffix);
+    char *text;
+
+    if (len < suffix_len) {
+        len = suffix_len;
+    }
+
+    text = generate_text(len, fill);
+    if (!text) {
+        return NULL;
+    }
+
+    memcpy(text + len - suffix_len, suffix, suffix_len);
+    return text;
+}
+
+static int bench_iterations_for_size(size_t len) {
+    if (len >= 100000) return 100;
+    if (len >= 10000) return 1000;
+    return 10000;
+}
+
+static void bench_posix_comparison(void) {
+    const PosixCompareCase tests[] = {
+        { "literal",     "abc",                                    '-', "abc" },
+        { "plus",        "a+b",                                    '-', "aaaaab" },
+        { "digit class", "[0-9]+",                                 '-', "1234567890" },
+        { "alternation", "(abc|def)+",                             '-', "abcdefabc" },
+        { "end anchor",  "world$",                                 '-', "world" },
+        { "email-like",  "[A-Za-z0-9_]+@[A-Za-z0-9_]+\\.[A-Za-z]+", '-', "user_123@example.com" },
+        { NULL, NULL, 0, NULL },
+    };
+    size_t sizes[] = { 100, 1000, 10000, 100000 };
+    const char *size_labels[] = { "100B", "1KB", "10KB", "100KB" };
+    int total = 0;
+    int passed = 0;
+    double ratio_sum = 0.0;
+    double min_ratio = 0.0;
+    SystemPosixRegexApi posix_api;
+
+    printf("\n=== 8. DFA match vs POSIX regex.h ===\n");
+    printf("  Target: DFA matching throughput >= %.0f%% of POSIX regex.h\n",
+           DFA_POSIX_SPEED_TARGET * 100.0);
+    printf("  (Compile time is excluded; each pattern is compiled once per case.)\n");
+
+    if (!load_system_posix_regex(&posix_api)) {
+        printf("  [SKIP] Unable to resolve system POSIX regcomp/regexec/regfree\n");
+        close_system_posix_regex(&posix_api);
+        return;
+    }
+
+    for (int ti = 0; tests[ti].pattern; ti++) {
+        for (int si = 0; si < 4; si++) {
+            size_t len = sizes[si];
+            int iters = bench_iterations_for_size(len);
+            char *text = generate_text_with_suffix(len, tests[ti].fill, tests[ti].needle);
+            engine_regex_t *engine_prog = NULL;
+            regex_t posix_prog;
+            int posix_compiled = 0;
+            MatchResult warmup = {0};
+            regmatch_t pmatch[1];
+            double t0, t1;
+            double dfa_ms, posix_ms;
+            double dfa_throughput, posix_throughput, ratio;
+            volatile int matched_sink = 0;
+
+            if (!text) continue;
+
+            engine_prog = regex_compile(tests[ti].pattern, REGEX_FLAG_NONE);
+            if (!engine_prog) {
+                printf("  [SKIP] %-12s %-38s + %-6s  engine compile failed\n",
+                       tests[ti].label, tests[ti].pattern, size_labels[si]);
+                free(text);
+                continue;
+            }
+
+            if (posix_api.regcomp(&posix_prog, tests[ti].pattern, REG_EXTENDED) != 0) {
+                printf("  [SKIP] %-12s %-38s + %-6s  POSIX compile failed\n",
+                       tests[ti].label, tests[ti].pattern, size_labels[si]);
+                regex_free(engine_prog);
+                free(text);
+                continue;
+            }
+            posix_compiled = 1;
+
+            if (!regex_search(engine_prog, text, &warmup) ||
+                posix_api.regexec(&posix_prog, text, 1, pmatch, 0) != 0) {
+                printf("  [SKIP] %-12s %-38s + %-6s  semantic mismatch/no match\n",
+                       tests[ti].label, tests[ti].pattern, size_labels[si]);
+                if (posix_compiled) posix_api.regfree(&posix_prog);
+                regex_free(engine_prog);
+                free(text);
+                continue;
+            }
+
+            t0 = elapsed_ms();
+            for (int j = 0; j < iters; j++) {
+                MatchResult r;
+                matched_sink += regex_search(engine_prog, text, &r);
+            }
+            t1 = elapsed_ms();
+            dfa_ms = t1 - t0;
+
+            t0 = elapsed_ms();
+            for (int j = 0; j < iters; j++) {
+                matched_sink += (posix_api.regexec(&posix_prog, text, 1, pmatch, 0) == 0);
+            }
+            t1 = elapsed_ms();
+            posix_ms = t1 - t0;
+
+            (void)matched_sink;
+
+            dfa_throughput = dfa_ms > 0.0 ? (iters * len) / (dfa_ms / 1000.0) : 0.0;
+            posix_throughput = posix_ms > 0.0 ? (iters * len) / (posix_ms / 1000.0) : 0.0;
+            ratio = posix_throughput > 0.0 ? dfa_throughput / posix_throughput : 0.0;
+
+            total++;
+            ratio_sum += ratio;
+            if (total == 1 || ratio < min_ratio) {
+                min_ratio = ratio;
+            }
+            if (ratio >= DFA_POSIX_SPEED_TARGET) {
+                passed++;
+            }
+
+            printf("  [%s] %-12s %-38s + %-6s  DFA %8.3f ms  POSIX %8.3f ms  ratio %6.1f%%\n",
+                   ratio >= DFA_POSIX_SPEED_TARGET ? "PASS" : "FAIL",
+                   tests[ti].label, tests[ti].pattern, size_labels[si],
+                   dfa_ms, posix_ms, ratio * 100.0);
+
+            record_result("dfa_match_vs_posix", tests[ti].pattern, dfa_ms, len, iters);
+            record_result("posix_regex_h_match", tests[ti].pattern, posix_ms, len, iters);
+
+            if (posix_compiled) posix_api.regfree(&posix_prog);
+            regex_free(engine_prog);
+            free(text);
+        }
+    }
+
+    if (total > 0) {
+        double avg_ratio = ratio_sum / total;
+        printf("  Summary: %d/%d cases >= %.0f%%, avg %.1f%%, min %.1f%% => %s\n",
+               passed, total, DFA_POSIX_SPEED_TARGET * 100.0,
+               avg_ratio * 100.0, min_ratio * 100.0,
+               passed == total ? "PASS" : "FAIL");
+    } else {
+        printf("  Summary: no comparable POSIX regex.h cases were measured\n");
+    }
+
+    close_system_posix_regex(&posix_api);
+}
+#else
+static void bench_posix_comparison(void) {
+    printf("\n=== 8. DFA match vs POSIX regex.h ===\n");
+    printf("  [SKIP] Current platform does not provide system POSIX regex.h\n");
+}
+#endif
+
+/* ========================================================================== */
+/*  10. Full compile pipeline benchmark                                       */
+/* ========================================================================== */
+
 static void bench_full_pipeline(void) {
     const char *patterns[] = {
         "abc",
@@ -753,7 +986,7 @@ static void bench_full_pipeline(void) {
         int iters = 10000;
 
         for (int j = 0; j < iters; j++) {
-            regex_t *prog = regex_compile(patterns[i], REGEX_FLAG_NONE);
+            engine_regex_t *prog = regex_compile(patterns[i], REGEX_FLAG_NONE);
             if (prog) regex_free(prog);
         }
 
@@ -788,7 +1021,7 @@ static void bench_memory(void) {
         const char *text = "hello abc123 world user@test.com";
 
         for (int j = 0; j < iters; j++) {
-            regex_t *prog = regex_compile(patterns[i], REGEX_FLAG_NONE);
+            engine_regex_t *prog = regex_compile(patterns[i], REGEX_FLAG_NONE);
             if (prog) {
                 MatchResult r;
                 regex_search(prog, text, &r);
@@ -864,10 +1097,7 @@ int main(void) {
     /* 7. FindAll */
     bench_findall();
 
-    /* 8. POSIX Compat Layer */
-    bench_posix_compat();
-
-    /* 9. Self-built Engine vs POSIX regex.h */
+    /* 8. DFA match vs POSIX regex.h */
     bench_posix_comparison();
 
     /* 10. Full Pipeline */

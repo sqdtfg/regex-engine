@@ -112,7 +112,7 @@ target_link_libraries(regex_posix_test PRIVATE regex_core)
 
 # 12) benchmark — 性能基准测试（含 POSIX regex.h 对比）
 add_executable(benchmark tests/benchmark.c)
-target_link_libraries(benchmark PRIVATE regex_core)
+target_link_libraries(benchmark PRIVATE regex_core ${CMAKE_DL_LIBS})
 
 # 13) regex_grep_test — Grep 测试集适配
 add_executable(regex_grep_test tests/test_grep.c)
