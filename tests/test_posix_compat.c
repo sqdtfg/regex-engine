@@ -55,9 +55,9 @@ static void check_fail(const char *desc, const char *expected, const char *actua
 }
 
 #define CHECK_INT_EQ(expected, actual, desc) \
-    do { if ((int)(expected) != (int)(actual)) { \
-        char e[32], a[32]; snprintf(e,sizeof(e),"%d",(expected)); \
-        snprintf(a,sizeof(a),"%d",(actual)); check_fail(desc,e,a); \
+    do { if ((long long)(expected) != (long long)(actual)) { \
+        char e[32], a[32]; snprintf(e,sizeof(e),"%lld",(long long)(expected)); \
+        snprintf(a,sizeof(a),"%lld",(long long)(actual)); check_fail(desc,e,a); \
     } else check_pass(desc); } while (0)
 
 #define CHECK_STR_EQ(expected, actual, desc) \
@@ -66,9 +66,9 @@ static void check_fail(const char *desc, const char *expected, const char *actua
         if ((_exp && _act && strcmp(_exp, _act) == 0) || (!_exp && !_act)) \
             check_pass(desc); \
         else { \
-            char ea[64], aa[64]; \
-            snprintf(ea,sizeof(ea),"%s",_exp?_exp:"NULL"); \
-            snprintf(aa,sizeof(aa),"%s",_act?_act:"NULL"); \
+            char ea[256], aa[256]; \
+            snprintf(ea,sizeof(ea),"%.255s",_exp?_exp:"NULL"); \
+            snprintf(aa,sizeof(aa),"%.255s",_act?_act:"NULL"); \
             check_fail(desc, ea, aa); \
         } \
     } while (0)
@@ -339,7 +339,6 @@ static void test_free_after_nomatch(void) {
 /* ========================================================================== */
 
 static void test_error_messages(void) {
-    regex_prog_t prog;
     char buf[256];
     const char *msg;
 
@@ -361,11 +360,9 @@ static void test_error_messages(void) {
 }
 
 static void test_error_buffer(void) {
-    regex_prog_t prog;
     char tiny[4];
-    const char *msg;
 
-    msg = regerror(REG_BADPAT, NULL, tiny, sizeof(tiny));
+    regerror(REG_BADPAT, NULL, tiny, sizeof(tiny));
     CHECK_TRUE(strlen(tiny) < sizeof(tiny), "error: 小缓冲截断");
     CHECK_TRUE(tiny[3] == '\0', "error: 小缓冲以 \\0 结尾");
 

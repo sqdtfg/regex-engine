@@ -269,7 +269,9 @@ static void bench_match(void) {
             if (strstr(pat, "\\d")) {
                 memset(text, '0', len);
             } else if (strstr(pat, "@")) {
-                snprintf(text, len, "user@example.com%s", text + 16);
+                /* 用 memmove 替代 snprintf 重叠写入，消除 -Wrestrict 警告 */
+                memmove(text + 16, text, len - 16 > 16 ? 16 : len - 16);
+                memcpy(text, "user@example.com", 16);
             }
 
             regex_t *prog = regex_compile(pat, REGEX_FLAG_NONE);

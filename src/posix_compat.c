@@ -117,8 +117,11 @@ int regcomp(regex_prog_t *prog, const char *pattern, int cflags) {
         ASTNode *ast = parser_parse(&parser);
 
         if (!ast) {
+            /* parser.error_msg 最多 256 字节，re_errmsg 也是 256 字节，
+             * 但 "parse error: " 前缀会多出 14 字节。
+             * 使用 snprintf 截断是安全的，编译器警告为误报。 */
             snprintf(temp.re_errmsg, sizeof(temp.re_errmsg),
-                     "parse error: %s", parser.error_msg);
+                     "parse error: %.240s", parser.error_msg);
             temp.re_errcode = REG_BADPAT;
             *prog = temp;
             return REG_BADPAT;
