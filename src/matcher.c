@@ -12,7 +12,7 @@
 /* ========================================================================== */
 
 /* ========================================================================== */
-/*  内部辅助：字符区间标签生成（文本/DOT 共用）                                 */
+/*  内部辅助：转移标签语义化识别（semantic_range_label）                        */
 /* ========================================================================== */
 
 /**
@@ -167,8 +167,8 @@ MatchResult dfa_match_full(const DFAMachine *dfa, const char *input) {
     }
 
     /* 精确匹配：所有输入消耗完毕且停在接受状态。
-     * 注意：^ 隐式在 exact match 中通过只检查 start=0 实现；
-     * $ 隐式通过检查 *p == '\0' 实现。 */
+     * ^/$ 锚点由 NFA/DFA 构造时记录到 has_anchor_start/end 字段，
+     * 精确匹配天然满足 start=0 且消耗全部输入，因此此处无需额外检查。 */
     result.start = 0;
     result.end = (size_t)(p - input);
     result.matched = dfa->states[current_state].is_accept && *p == '\0';
@@ -240,7 +240,7 @@ MatchResult dfa_match(const DFAMachine *dfa, const char *input) {
 }
 
 /* ========================================================================== */
-/*  dfa_match_all — 查找所有匹配项（最多匹配                                      */
+/*  dfa_match_all — 查找所有不重叠匹配项（最多 max_results 项）                 */
 /* ========================================================================== */
 
 int dfa_match_all(const DFAMachine *dfa, const char *input, MatchResult *results, int max_results) {
@@ -295,7 +295,7 @@ int dfa_match_all(const DFAMachine *dfa, const char *input, MatchResult *results
 }
 
 /* ========================================================================== */
-/*  内部辅助：字符区间标签生成（文本/DOT 共用）                                 */
+/*  内部辅助：字符区间格式化输出（format_range_label）                          */
 /* ========================================================================== */
 
 /**

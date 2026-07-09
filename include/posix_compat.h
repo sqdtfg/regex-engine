@@ -8,14 +8,14 @@
 /*  POSIX 正则表达式兼容层                                                       */
 /*                                                                           */
 /*  本文件提供一套与 POSIX 1003.1 <regex.h> 风格一致的 API，                   */
-/*  底层复用本项目已有的 regex_compile / regex_match / regex_search /         */
-/*  regex_findall 等函数。                                                     */
+/*  一次解析 AST 后同时构建基础 DFA（供子串匹配）和带捕获组的 DFA（供            */
+/*  regmatch_t 输出）。                                                        */
 /*                                                                           */
 /*  目标：                                                                     */
 /*    - 对上层调用者提供熟悉的 regcomp/regexec/regfree/regerror 接口          */
 /*    - 支持基本 POSIX 标志（REG_EXTENDED、REG_ICASE、REG_NOSUB、             */
 /*      REG_NEWLINE、REG_NOTBOL、REG_NOTEOL）                                */
-/*    - 捕获组信息通过 regmatch_t 数组传出                                     */
+/*    - 捕获组信息通过 regmatch_t 数组传出（基于 AST 遍历统计）                */
 /* ========================================================================== */
 
 #ifdef __cplusplus
@@ -85,11 +85,11 @@ enum {
 
 enum {
     REG_EXTENDED  = 0x01,  /* 扩展正则（本项目默认支持） */
-    REG_ICASE     = 0x02,  /* 忽略大小写（暂不实现） */
+    REG_ICASE     = 0x02,  /* 忽略大小写（接受但未改变匹配行为） */
     REG_NOSUB     = 0x04,  /* 不返回匹配位置信息 */
-    REG_NEWLINE   = 0x08,  /* 换行匹配（暂不实现） */
-    REG_NOTBOL    = 0x10,  /* 输入不是行首（暂不实现） */
-    REG_NOTEOL    = 0x20   /* 输入不是行尾（暂不实现） */
+    REG_NEWLINE   = 0x08,  /* 换行匹配（接受但未改变匹配行为） */
+    REG_NOTBOL    = 0x10,  /* 输入不是行首（接受但未改变匹配行为） */
+    REG_NOTEOL    = 0x20   /* 输入不是行尾（接受但未改变匹配行为） */
 };
 
 /* -------------------------------------------------------------------------- */
@@ -114,7 +114,7 @@ int regcomp(regex_prog_t *prog, const char *pattern, int cflags);
  * @param nmatch    regmatch_t 数组大小
  * @param pmatch    匹配结果数组（至少 nmatch 个 regmatch_t）。
  *                  若 cflags 含 REG_NOSUB，则忽略。
- * @param eflags    执行标志（REG_NOTBOL / REG_NOTEOL / REG_NEWLINE，暂不实现）
+ * @param eflags    执行标志（REG_NOTBOL / REG_NOTEOL / REG_NEWLINE，目前接受但不改变行为）
  * @return          0 = 匹配成功, REG_NOMATCH = 未匹配, 其他 = 错误码
  */
 int regexec(const regex_prog_t *prog, const char *string,

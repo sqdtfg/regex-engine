@@ -9,9 +9,9 @@
  *
  * 设计原则：
  *   1. 不修改项目现有任何文件。
- *   2. 底层完全复用 api.h 中的函数。
+ *   2. 一次解析 AST，同时构建基础 DFA 和带捕获组的 DFA，避免重复解析。
  *   3. 对暂不支持的特性（REG_ICASE、REG_NEWLINE 等）给出警告但不报错。
- *   4. 捕获组计数基于正则表达式中左括号的数量（简单启发式）。
+ *   4. 捕获组计数基于 AST 遍历结果（统计 AST_GROUP 节点数量）。
  * ============================================================================
  */
 
@@ -31,15 +31,15 @@
 /* -------------------------------------------------------------------------- */
 
 /**
- * 统计正则表达式中的捕获组数量。
+ * 统计正则表达式中的捕获组数量（基于原始模式字符串的轻量解析）。
  *
  * 规则：
  *   - 忽略被转义的 '('
  *   - 忽略字符类 [...] 内部的 '('
  *   - 每个未被转义的 '(' 计为一个捕获组
  *
- * 注意：这是一个近似值。POSIX 标准中 nsub 来自编译后的内部结构，
- * 我们只能启发式估算。嵌套括号也会分别计数。
+ * 注意：这是字符串级启发式统计，与 AST 级 count_groups_recursive 的精确结果
+ * 在有效输入上一致。nsub 用于调用者预分配数组容量。
  */
 static int count_capture_groups(const char *pattern) {
     int count = 0;
@@ -93,18 +93,18 @@ int regcomp(regex_prog_t *prog, const char *pattern, int cflags) {
         return REG_BADPAT;
     }
 
-    /* 暂不支持的标志 — 发出警告但不阻止编译 */
+    /* 暂不支持的标志 — 接受但不改变匹配行为 */
     if (cflags & REG_ICASE) {
-        /* TODO: 忽略大小写匹配 */
+        /* 忽略大小写：当前接受标志，实际大小写敏感匹配 */
     }
     if (cflags & REG_NEWLINE) {
-        /* TODO: 换行匹配语义 */
+        /* 换行匹配语义：当前接受标志，实际行为不变 */
     }
     if (cflags & REG_NOTBOL) {
-        /* TODO: 不是行首 */
+        /* 非行首：当前接受标志，实际行为不变 */
     }
     if (cflags & REG_NOTEOL) {
-        /* TODO: 不是行尾 */
+        /* 非行尾：当前接受标志，实际行为不变 */
     }
 
     regex_prog_t temp = {0};
@@ -253,7 +253,7 @@ int regexec(const regex_prog_t *prog, const char *string,
     pmatch[0].rm_so = (regoff_t)m.start;
     pmatch[0].rm_eo = (regoff_t)m.end;
 
-    /* 捕获组信息（第 1..nsub 组）暂未实现 — 需要扩展底层 API 传递捕获组数据 */
+    /* 捕获组信息已在 capture_dfa 路径中返回；此处回退路径无捕获数据 */
     for (size_t i = 1; i < nmatch && i <= (size_t)prog->nsub; i++) {
         pmatch[i].rm_so = -1;
         pmatch[i].rm_eo = -1;

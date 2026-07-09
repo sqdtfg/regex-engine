@@ -68,7 +68,10 @@ static ASTNode *parse_atom(Parser *p);
 /*         | '[' ... ']'   (TOK_BRACKET)                                     */
 /*         | '\d' ...       (TOK_ESCAPE)                                      */
 /*         | '.'             (TOK_DOT)                                        */
+/*         | '^'             (TOK_CARET)                                      */
+/*         | '$'             (TOK_DOLLAR)                                     */
 /*         | 普通字符         (TOK_CHAR)                                       */
+/*  ( '(' 也匹配空括号 ERE 语义： () 产生 AST_GROUP 不含子节点)                    */
 /* ========================================================================== */
 
 static ASTNode *parse_atom(Parser *p) {
@@ -228,7 +231,8 @@ static ASTNode *parse_factor(Parser *p) {
 /*  连接是并排放置，没有任何分隔符。连续多个因子 = 连接。                              */
 /*  当 lookahead 是一个原子的开头时，继续拼接。                                    */
 /*                                                                             */
-/*  原子开头 = { TOK_CHAR, TOK_DOT, TOK_ESCAPE, TOK_BRACKET, TOK_LPAREN, TOK_CARET, TOK_DOLLAR }       */
+/*  原子开头 = { TOK_CHAR, TOK_DOT, TOK_ESCAPE, TOK_BRACKET,                   */
+/*              TOK_LPAREN, TOK_CARET, TOK_DOLLAR }                           */
 /* ========================================================================== */
 
 static ASTNode *parse_chain(Parser *p) {

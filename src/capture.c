@@ -20,13 +20,13 @@
 /*                                                                            */
 /*  2. dfa_match_captured(dfa, input):                                          */
 /*     - 通过 DFA.states 指针查全局映射表获得 CaptureData。                      */
-/*     - 调用 dfa_match(dfa, input) 找到完整匹配区间 [match_start, match_end)。  */
+/*     - 内联最左最长匹配找到完整匹配区间。                                       */
 /*     - 遍历 CaptureData 中记录的每个子 AST，                                  */
-/*       用子 AST 构建独立 DFA，在匹配区间内做最长匹配。                          */
+/*       用子 AST 构建独立 DFA，在匹配区间内做最长匹配（match_sub_dfa_greedy）。  */
 /*     - 填充 CapturedMatch.groups[]。                                          */
 /*                                                                            */
 /*  3. 为什么用子 DFA 而不是 NFA 模拟？                                          */
-/*     - NFAGraph 只暴露 start/end 指针，没有状态数组，无法做 epsilon-closure。   */
+/*     - NFAGraph 只暴露 start/end 指针，无状态数组，无法高效做 epsilon-closure。 */
 /*     - 子 DFA 复用已有的 dfa_from_nfa + dfa_match，代码简洁。                   */
 /* ========================================================================== */
 
@@ -322,9 +322,8 @@ CapturedMatch dfa_match_captured(const DFAMachine *dfa, const char *input) {
     CaptureData *capdata = capture_map_find(dfa->states);
     int group_count = capdata ? capdata->group_count : 0;
 
-    /* 2. 用基础 DFA 匹配找到完整匹配区间 */
+    /* 2. 用基础 DFA 匹配找到完整匹配区间（最左最长匹配） */
     MatchResult full_match = {0};
-    /* 注意：需要使用贪婪匹配（最长匹配），而非 dfa_match 的最短匹配语义 */
     {
         size_t input_len = strlen(input);
         size_t best_end = 0;

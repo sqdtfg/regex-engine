@@ -82,8 +82,8 @@ static Token parse_escape(Tokenizer *tok) {
  *
  * 特殊规则：
  *   - 集合开头紧跟的 ']' 视为普通字符（如 [^]abc]）
- *   - 集合内 '-' 表示范围（暂未展开，暂原样保留）
- *   - 集合内 '\' 转义暂时按字面处理
+ *   - 集合内 '-' 范围标记原样保留，由 DFA 匹配时的 bracket_matches() 处理
+ *   - 集合内 '\' 暂按字面字符处理
  *
  * 返回值：t.bracket.str 指向 malloc 分配的字符串，调用者负责 free。
  */

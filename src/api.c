@@ -1,5 +1,13 @@
-#include "api.h"
+/**
+ * ============================================================================
+ * 公共 API — regex_compile / regex_match / regex_search / regex_findall
+ * ============================================================================
+ *
+ * 编译路径：pattern → parser → AST → NFA → DFA → DFA 最小化 → regex_t
+ * 匹配路径：regex_t.dfa → dfa_match / dfa_match_full / dfa_match_all → MatchResult
+ */
 
+#include "api.h"
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>

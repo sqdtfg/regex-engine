@@ -352,8 +352,8 @@ static NFAFragment build_frag(const ASTNode *node, StateVec *vec) {
     /* ============================================================== */
     /*  捕获组 (a) — 直接透传子表达式                                    */
     /*                                                                  */
-    /*  当前不做捕获语义记录（仅 AST 层面打了 GROUP 标记）。               */
     /*  NFA 层面直接递归左子节点，不引入额外状态和边。                      */
+    /*  捕获语义由 capture.c 在 AST/DFA 层面独立处理。                     */
     /* ============================================================== */
     case AST_GROUP:
         /* 空 GROUP（left=NULL）对应 () — 零宽度，用 ε 边透传 */
@@ -410,6 +410,7 @@ static NFAFragment build_frag(const ASTNode *node, StateVec *vec) {
  *                  当 ast_root 为 NULL 时返回全零结构。
  *                  调用者最终必须调用 nfa_free() 释放。
  */
+
 /**
  * 递归遍历 AST，检测最左/最右叶是否为锚定节点。
  * CONCAT 的左结合性意味着锚定可能被套多层 CONCAT。
