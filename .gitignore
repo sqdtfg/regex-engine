@@ -26,6 +26,7 @@ compile_commands.json
 docs/
 
 # DOT
+DOT/
 *.dot
 
 # log
