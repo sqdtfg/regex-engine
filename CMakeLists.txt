@@ -114,6 +114,10 @@ target_link_libraries(regex_posix_test PRIVATE regex_core)
 add_executable(regex_benchmark tests/test_benchmark.c)
 target_link_libraries(regex_benchmark PRIVATE regex_core)
 
+# 13) grep_test_runner — Spencer 测试套件运行器
+add_executable(grep_test_runner tests/grep_test_runner.c)
+target_link_libraries(grep_test_runner PRIVATE regex_core)
+
 # ---------- 安装 ----------
 install(TARGETS regex_core
     ARCHIVE DESTINATION lib

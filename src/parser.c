@@ -131,9 +131,17 @@ static ASTNode *parse_atom(Parser *p) {
     /* ---- 括号 '(' regex ')' ---- */
     if (tok.type == TOK_LPAREN) {
         advance(p);                                 /* 消费 '(' */
+        /* ERE 兼容：空括号 () 是合法的（匹配空串） */
+        if (peek(p).type == TOK_RPAREN) {
+            advance(p);                                 /* 消费 ')' */
+            /* 空匹配：创建一个 epsilon 等价物 — 无子节点的 GROUP */
+            ASTNode *group = ast_node_new(AST_GROUP);
+            group->pos = tok.pos;
+            return group;
+        }
         ASTNode *inner = parse_regex(p);            /* 递归解析内部 */
         if (p->error_code) { ast_free(inner); return NULL; }
-        expect(p, TOK_RPAREN, "右括号 ')'");        /* 消费 '）' */
+        expect(p, TOK_RPAREN, "右括号 ')'");        /* 消费 ')' */
         if (p->error_code) { ast_free(inner); return NULL; }
 
         /* 包装为捕获组 */
@@ -141,6 +149,15 @@ static ASTNode *parse_atom(Parser *p) {
         group->left = inner;
         group->pos = tok.pos;
         return group;
+    }
+
+    /* ---- ERE 兼容：孤立的右括号视为普通字符 ---- */
+    if (tok.type == TOK_RPAREN) {
+        advance(p);
+        ASTNode *node = ast_node_new(AST_CHAR);
+        node->ch = ')';
+        node->pos = tok.pos;
+        return node;
     }
 
     /* ---- 意外的 token ---- */
@@ -236,8 +253,8 @@ static ASTNode *parse_chain(Parser *p) {
         /* 判断下一个 token 是不是因子的开头 */
         int is_atom_start = (t == TOK_CHAR || t == TOK_DOT ||
                              t == TOK_ESCAPE || t == TOK_BRACKET ||
-                             t == TOK_LPAREN || t == TOK_CARET ||
-                             t == TOK_DOLLAR);
+                             t == TOK_LPAREN || t == TOK_RPAREN ||
+                             t == TOK_CARET || t == TOK_DOLLAR);
 
         if (!is_atom_start) break;          /* 不是因子开头 → 连接结束 */
 
@@ -300,13 +317,17 @@ void parser_init(Parser *parser, const char *input) {
 ASTNode *parser_parse(Parser *parser) {
     ASTNode *root = parse_regex(parser);
 
-    /* 解析完成后，应该遇到 EOF；否则有多余字符 */
+    /* 解析完成后，应该遇到 EOF；否则有多余字符。
+     * ERE 兼容：允许结尾的孤括号 ) 存在（视为前文已匹配/解析完）。 */
     if (!parser->error_code && peek(parser).type != TOK_EOF) {
-        parser->error_code = 1;
-        snprintf(parser->error_msg, sizeof(parser->error_msg),
-                 "正则表达式在第 %zu 个字符处有多余内容", peek(parser).pos);
-        ast_free(root);
-        return NULL;
+        /* 如果残留 token 是 RPAREN，且 root 非 NULL，则忽略（ERE 兼容） */
+        if (!(peek(parser).type == TOK_RPAREN && root != NULL)) {
+            parser->error_code = 1;
+            snprintf(parser->error_msg, sizeof(parser->error_msg),
+                     "正则表达式在第 %zu 个字符处有多余内容", peek(parser).pos);
+            ast_free(root);
+            return NULL;
+        }
     }
 
     /* 如果输入就是空的，返回 NULL */

@@ -38,10 +38,9 @@ int main(int argc, char *argv[]) {
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
 #endif
-
     /* 默认测试输入 */
     // const char *pattern = (argc >= 2) ? argv[1] : "a|bc*";
-    const char *pattern = (argc >= 2) ? argv[1] : "a|bc*|[^abc]|[a-zA-Z0-9]ab.x*y+z?";
+    const char *pattern = (argc >= 2) ? argv[1] : "^aa|bc*|[^abc]|[a-zA-Z0-9]ab.x*y+z?z$";
 
 
     printf("╔══════════════════════════════════════╗\n");

@@ -29,4 +29,6 @@ docs/
 *.dot
 
 # log
+log/grep/
 log/
+grep/

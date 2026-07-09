@@ -155,6 +155,10 @@ static Token parse_curly(Tokenizer *tok) {
     char c;
     while ((c = consume(tok)) != '\0') {
         if (c >= '0' && c <= '9') {
+            /* 防止整数溢出 — 量词值 > 100000 视为拒绝 */
+            if (min_val > 100000) {
+                return make_error(tok, "量词值过大");
+            }
             min_val = min_val * 10 + (c - '0');
             has_digit = 1;
         } else {
@@ -163,7 +167,11 @@ static Token parse_curly(Tokenizer *tok) {
     }
 
     if (!has_digit) {
-        return make_error(tok, "{ 后缺少数字");
+        /* ERE 兼容：裸 { 后不是数字 → 回退为字面字符 */
+        t.type = TOK_CHAR;
+        t.ch = '{';
+        t.pos = tok->pos - 1;
+        return t;
     }
 
     t.curly.min = (int)min_val;
@@ -174,6 +182,9 @@ static Token parse_curly(Tokenizer *tok) {
         has_digit = 0;
         while ((c = consume(tok)) != '\0') {
             if (c >= '0' && c <= '9') {
+                if (max_val > 100000) {
+                    return make_error(tok, "量词值过大");
+                }
                 max_val = max_val * 10 + (c - '0');
                 has_digit = 1;
             } else {
@@ -192,7 +203,13 @@ static Token parse_curly(Tokenizer *tok) {
 
     /* 必须遇到 '}' */
     if (c != '}') {
-        return make_error(tok, "未闭合的量词");
+        /* ERE 兼容：未闭合的 { → 回退为字面字符。
+         * 但如果看到了数字且 c 是字母或逗号后有字母，按 ERE 语义
+         * 这不是合法量词 → 回退为普通字符。 */
+        t.type = TOK_CHAR;
+        t.ch = '{';
+        t.pos = tok->pos - 1;
+        return t;
     }
 
     return t;

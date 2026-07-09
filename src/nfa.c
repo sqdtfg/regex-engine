@@ -356,6 +356,15 @@ static NFAFragment build_frag(const ASTNode *node, StateVec *vec) {
     /*  NFA 层面直接递归左子节点，不引入额外状态和边。                      */
     /* ============================================================== */
     case AST_GROUP:
+        /* 空 GROUP（left=NULL）对应 () — 零宽度，用 ε 边透传 */
+        if (!node->left) {
+            NFAState *s = state_new(vec->count);  vec_push(vec, s);
+            NFAState *e = state_new(vec->count);  vec_push(vec, e);
+            s->edge1_type = NFA_EDGE_EPSILON;
+            s->edge1_next = e;
+            NFAFragment f = { s, e };
+            return f;
+        }
         return build_frag(node->left, vec);
 
     /* ============================================================== */

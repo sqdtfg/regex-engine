@@ -371,14 +371,16 @@ static void test_curly_unclosed(void) {
     Tokenizer tok;
     tokenizer_init(&tok, "{3");
     Token t = tokenizer_next(&tok);
-    CHECK_TOKEN(TOK_ERROR, t, "{3（未闭合）→ 词法错误");
+    /* ERE 兼容：裸 { 后跟数字但不闭合 → 回退为字面字符 { */
+    CHECK_TOKEN(TOK_CHAR, t, "{3（未闭合）→ 普通字符（ERE兼容）");
 }
 
 static void test_curly_no_digit(void) {
     Tokenizer tok;
     tokenizer_init(&tok, "{a}");
     Token t = tokenizer_next(&tok);
-    CHECK_TOKEN(TOK_ERROR, t, "{a}（非数字）→ 词法错误");
+    /* ERE 兼容：{ 后不是数字 → 回退为字面字符 { */
+    CHECK_TOKEN(TOK_CHAR, t, "{a}（非数字）→ 普通字符（ERE兼容）");
 }
 
 /* --- token_to_string --- */
