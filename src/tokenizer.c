@@ -81,7 +81,9 @@ static Token parse_escape(Tokenizer *tok) {
  * 调用前提：当前位置已在 '[' 上（调用者已消费 '[' 并记录了起始 pos）。
  *
  * 特殊规则：
- *   - 集合开头紧跟的 ']' 视为普通字符（如 [^]abc]）
+ *   - 集合开头紧跟的 ']' 视为普通字符（如 []abc]）
+ *   - 集合开头紧跟 "^]" 时 ']' 视为普通字符（如 [^]abc]）
+ *   - POSIX 字符类 [[:xxx:]] 和等价类 [[=xxx=]] 通过消费 [:xxx:] / [=xxx=] 整体保持原子性
  *   - 集合内 '-' 范围标记原样保留，由 DFA 匹配时的 bracket_matches() 处理
  *   - 集合内 '\' 暂按字面字符处理
  *
@@ -89,7 +91,7 @@ static Token parse_escape(Tokenizer *tok) {
  */
 static Token parse_bracket(Tokenizer *tok) {
     // pos 回退到 '['
-    Token t = { .type = TOK_BRACKET, .pos = tok->pos - 1 };  
+    Token t = { .type = TOK_BRACKET, .pos = tok->pos - 1 };
 
     /* 收集括号内的原始内容 */
     size_t capacity = 16;
@@ -99,16 +101,46 @@ static Token parse_bracket(Tokenizer *tok) {
         return make_error(tok, "内存分配失败");
     }
 
+    int posix_depth = 0;  /* POSIX 字符类 [: / :] 和 [= / =] 嵌套追踪 */
     char c;
-    int first = 1;  /* 标记是否为集合内的第一个字符 */
     while ((c = consume(tok)) != '\0') {
-        /* '[' 后紧跟的第一个 ']' 是普通字符，不是闭合符 */
-        if (c == ']' && !first) {
-            break;
-        }
-        first = 0;
 
-        /* 扩容 */
+        /* ---- 检测 POSIX 字符类开始: [: 或 [= ---- */
+        if (c == '[') {
+            char next = peek(tok);
+            if (next == ':' || next == '=') {
+                posix_depth++;
+            }
+        }
+
+        /* ---- 检测 POSIX 字符类结束: :] 或 =] ---- */
+        /* 将 :] / =] 作为一对消费，避免中间的 ] 被误判为括号闭合 */
+        if (posix_depth > 0 && (c == ':' || c == '=') && peek(tok) == ']') {
+            /* 扩容 */
+            if (len + 2 >= capacity) {
+                capacity = (capacity + 2) * 2;
+                char *tmp = realloc(buf, capacity);
+                if (!tmp) { free(buf); return make_error(tok, "内存分配失败"); }
+                buf = tmp;
+            }
+            buf[len++] = c;
+            c = consume(tok);      /* 消费 ']' */
+            posix_depth--;
+            buf[len++] = c;        /* 存储 ']' */
+            continue;              /* 跳过下方的普通字符处理 */
+        }
+
+        /* ---- 闭合检查 ---- */
+        if (c == ']' && posix_depth == 0) {
+            /* 以下情况 ']' 视为普通字符而非闭合：
+             *   len==0               → ] 是 bracket 首字符 (如 []abc])
+             *   len==1 && buf[0]=='^' → ^ 后紧跟 ]  (如 [^]abc]) */
+            if (!(len == 0 || (len == 1 && buf[0] == '^'))) {
+                break;  /* 正常闭合 */
+            }
+        }
+
+        /* ---- 扩容并存储 ---- */
         if (len + 1 >= capacity) {
             capacity *= 2;
             char *tmp = realloc(buf, capacity);

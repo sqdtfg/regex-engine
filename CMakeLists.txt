@@ -116,9 +116,13 @@ target_link_libraries(dot_gen PRIVATE regex_core)
 add_executable(posix_compare tests/posix_compare.c)
 target_link_libraries(posix_compare PRIVATE regex_core)
 
-# 17) posix_system_bench — DFA vs 回溯NFA性能对比
+# 17) posix_system_bench — DFA vs 系统POSIX(PCRE) 性能直接对比
 add_executable(posix_system_bench tests/posix_system_bench.c)
 target_link_libraries(posix_system_bench PRIVATE regex_core)
+# 使用 CMake 变量设置额外的链接目录
+target_link_directories(posix_system_bench PRIVATE ${CMAKE_BINARY_DIR}/bin)
+# 链接系统 PCRE POSIX 库 (libpcreposix-0.dll)
+target_link_libraries(posix_system_bench PRIVATE pcreposix)
 
 # ---------- 安装 ----------
 install(TARGETS regex_core
