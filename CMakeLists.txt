@@ -126,7 +126,7 @@ target_link_libraries(posix_benchmark PRIVATE regex_core)
 add_executable(dot_gen tests/dot_gen.c)
 target_link_libraries(dot_gen PRIVATE regex_core)
 
-# 16) posix_compare — DFA vs POSIX 性能自动对比
+# 16) posix_compare — DFA vs 未最小化(POSIX等效) 性能对比
 add_executable(posix_compare tests/posix_compare.c)
 target_link_libraries(posix_compare PRIVATE regex_core)
 
@@ -185,7 +185,7 @@ add_custom_target(run_dotgen
     COMMENT "生成 NFA/DFA 转换图..."
 )
 
-# 一键运行 DFA vs POSIX 性能对比
+# 一键运行 DFA vs POSIX(未最小化等效) 性能对比
 add_custom_target(run_perf_compare
     COMMAND $<TARGET_FILE:posix_compare>
     DEPENDS posix_compare
