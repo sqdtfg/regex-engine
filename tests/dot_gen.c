@@ -28,6 +28,19 @@
 #include "dfa.h"
 #include "hopcroft.h"
 
+/* 安全文件名 */
+static void safe_name(const char *s, char *out, int max) {
+    int j = 0;
+    static const char *hex = "0123456789abcdef";
+    for (const char *p = s; *p && j < max - 4; p++) {
+        if ((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z') ||
+            (*p >= '0' && *p <= '9') || *p == '-' || *p == '_')
+            out[j++] = *p;
+        else { out[j++] = '_'; out[j++] = hex[((unsigned char)*p)>>4]; out[j++] = hex[((unsigned char)*p)&0xf]; }
+    }
+    out[j] = '\0';
+}
+
 /* ========================================================================== */
 /*  字符区间标签格式化（紧凑、HTML 安全）                                        */
 /* ========================================================================== */
@@ -404,6 +417,34 @@ int main(int argc, char **argv) {
         dfa_minimize(&dfa);
         fprintf(fp, "<h3>DFA 最小化后 &mdash; %d 个状态</h3>\n", dfa_after[i]);
         emit_dfa_table(fp, &dfa);
+
+        /* 生成 DOT 文件 */
+        {
+            char s[128]; safe_name(pat, s, sizeof(s));
+            char p[512];
+            /* NFA DOT */
+            {   Parser p2; parser_init(&p2, pat); ASTNode *a2 = parser_parse(&p2);
+                NFAGraph n2 = nfa_from_ast(a2);
+                snprintf(p, sizeof(p), "DOT/nfa_%s.dot", s);
+                nfa_dump_dot_file(&n2, p);
+                nfa_free(&n2); ast_free(a2);
+            }
+            /* DFA 最小化前 */
+            {   Parser p2; parser_init(&p2, pat); ASTNode *a2 = parser_parse(&p2);
+                NFAGraph n2 = nfa_from_ast(a2); DFAMachine d2 = dfa_from_nfa(&n2);
+                snprintf(p, sizeof(p), "DOT/dfa_before_%s.dot", s);
+                dfa_dump_dot_file(&d2, p);
+                nfa_free(&n2); ast_free(a2);
+            }
+            /* DFA 最小化后 */
+            {   Parser p2; parser_init(&p2, pat); ASTNode *a2 = parser_parse(&p2);
+                NFAGraph n2 = nfa_from_ast(a2); DFAMachine d2 = dfa_from_nfa(&n2);
+                dfa_minimize(&d2);
+                snprintf(p, sizeof(p), "DOT/dfa_min_%s.dot", s);
+                dfa_dump_dot_file(&d2, p);
+                dfa_free(&d2); nfa_free(&n2); ast_free(a2);
+            }
+        }
 
         dfa_free(&dfa);
         nfa_free(&nfa);

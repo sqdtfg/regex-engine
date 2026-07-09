@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>正则引擎 &mdash; 编译报告</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #f4f5f7; color: #1a1a2e; padding: 2rem;
+    max-width: 1100px; margin: 0 auto;
+  }
+  h1 { font-size: 1.5rem; margin-bottom: 0.2rem; }
+  .sub { color: #666; margin-bottom: 2rem; font-size: 0.9rem; }
+  h2 {
+    font-size: 1.15rem; margin: 2.2rem 0 0.75rem;
+    padding: 0.45rem 0.7rem; background: #e2e4e9;
+    border-left: 4px solid #3a7bd5; border-radius: 0 4px 4px 0;
+  }
+  h3 {
+    font-size: 0.95rem; margin: 1.4rem 0 0.55rem;
+    color: #444; font-weight: 600;
+  }
+
+  /* ---- 汇总表 ---- */
+  .summary { margin: 1rem 0 1.5rem; }
+  table {
+    width: 100%; border-collapse: collapse; margin-bottom: 1.2rem;
+    background: #fff; border-radius: 6px;
+    overflow: hidden; box-shadow: 0 1px 5px rgba(0,0,0,0.07);
+    font-size: 0.88rem;
+  }
+  th {
+    background: #3a3f51; color: #fff; padding: 0.5rem 0.65rem;
+    text-align: left; font-weight: 600; letter-spacing: 0.02em;
+  }
+  td { padding: 0.45rem 0.65rem; border-bottom: 1px solid #eee; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  .summary tr:hover td { background: #f0f4ff; }
+
+  /* 列宽 */
+  th.w-st, td.w-st { width: 4.5rem; text-align: center; font-weight: 700; }
+  th.w-ac, td.w-ac { width: 4rem; text-align: center; }
+  td.tx {
+    font-family: 'Cascadia Code', 'Cascadia Mono', 'Consolas', 'Fira Code', monospace;
+    font-size: 0.83rem; line-height: 1.55; word-break: keep-all;
+  }
+  td.tx b { color: #3a7bd5; font-weight: 700; }
+
+  td.ac-y { color: #1b7a1b; font-size: 1.05rem; }
+  td.ac-n { color: #bbb; }
+
+  /* ---- 徽章 ---- */
+  .badge {
+    display: inline-block; padding: 0.1rem 0.5rem; border-radius: 3px;
+    font-weight: 700; font-size: 0.78rem;
+  }
+  .badge-g { background: #e6f4ea; color: #1e7e34; }
+  .badge-y { background: #fff3cd; color: #856404; }
+  .badge-r { background: #fce4ec; color: #c62828; }
+
+  /* ---- 状态数统计卡 ---- */
+  .card-row { display: flex; gap: 1rem; margin: 0.6rem 0 1.2rem; flex-wrap: wrap; }
+  .card {
+    background: #fff; border-radius: 6px; padding: 0.65rem 1rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    min-width: 125px; text-align: center;
+  }
+  .card-num { font-size: 1.4rem; font-weight: 700; color: #2c3e50; }
+  .card-lbl { font-size: 0.73rem; color: #888; margin-top: 0.12rem; }
+
+  /* ---- 模式名 ---- */
+  code.re {
+    background: #eef1f7; padding: 0.15rem 0.4rem; border-radius: 3px;
+    font-size: 1rem; color: #3a3f51;
+  }
+
+  /* ---- 响应式 ---- */
+  @media (max-width: 700px) {
+    body { padding: 0.8rem; }
+    .card-row { flex-direction: column; }
+    .card { min-width: unset; }
+  }
+</style>
+</head>
+<body>
+<h1>&#9881; 正则引擎 &mdash; 编译报告</h1>
+<p class="sub">Thompson NFA &rarr; 子集构造 DFA &rarr; Hopcroft 最小化</p>
+<h2>&#128202; 状态压缩汇总</h2>
+<table class="summary">
+<thead><tr><th>编号</th><th>正则表达式</th><th>NFA 状态数</th><th>DFA(最小化前)</th><th>DFA(最小化后)</th><th>压缩比</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code class="re">a(b|c)*d</code></td><td class="w-st">12</td><td class="w-st">5</td><td class="w-st">3</td><td class="w-st"><span class="badge badge-g">40%</span></td></tr>
+<tr><td>2</td><td><code class="re">(a|b)*abb</code></td><td class="w-st">14</td><td class="w-st">5</td><td class="w-st">4</td><td class="w-st"><span class="badge badge-y">20%</span></td></tr>
+<tr><td>3</td><td><code class="re">\d{3}-\d{4}</code></td><td class="w-st">16</td><td class="w-st">9</td><td class="w-st">9</td><td class="w-st"><span class="badge badge-r">0%</span></td></tr>
+<tr><td>4</td><td><code class="re">\w+@\w+\.\w+</code></td><td class="w-st">16</td><td class="w-st">6</td><td class="w-st">6</td><td class="w-st"><span class="badge badge-r">0%</span></td></tr>
+<tr><td>5</td><td><code class="re">[a-z]+</code></td><td class="w-st">4</td><td class="w-st">2</td><td class="w-st">2</td><td class="w-st"><span class="badge badge-r">0%</span></td></tr>
+<tr><td>6</td><td><code class="re">a+</code></td><td class="w-st">4</td><td class="w-st">2</td><td class="w-st">2</td><td class="w-st"><span class="badge badge-r">0%</span></td></tr>
+<tr><td>7</td><td><code class="re">(ab|cd|ef)+</code></td><td class="w-st">18</td><td class="w-st">7</td><td class="w-st">5</td><td class="w-st"><span class="badge badge-y">29%</span></td></tr>
+<tr><td>8</td><td><code class="re">a?b?c?</code></td><td class="w-st">12</td><td class="w-st">4</td><td class="w-st">2</td><td class="w-st"><span class="badge badge-g">50%</span></td></tr>
+</tbody>
+</table>
+<h2>a(b|c)*d</h2>
+<div class="card-row"><div class="card"><div class="card-num">12</div><div class="card-lbl">NFA 状态数</div></div><div class="card"><div class="card-num">5</div><div class="card-lbl">DFA 最小化前状态数</div></div><div class="card"><div class="card-num">3</div><div class="card-lbl">DFA 最小化后状态数</div></div></div>
+<h3>DFA 最小化前 &mdash; 5 个状态</h3>
+<table><thead><tr><th class="w-st">状态</th><th class="w-ac">接受?</th><th>转移</th></tr></thead>
+<tbody>
+<tr><td class="w-st">S0</td><td class="w-ac ac-n">否</td><td class="tx">a &rarr; <b>S1</b></td></tr>
+<tr><td class="w-st">S1</td><td class="w-ac ac-n">否</td><td class="tx">b &rarr; <b>S2</b><br>c &rarr; <b>S3</b><br>d &rarr; <b>S4</b></td></tr>
+<tr><td class="w-st">S2</td><td class="w-ac ac-n">否</td><td class="tx">b &rarr; <b>S2</b><br>c &rarr; <b>S3</b><br>d &rarr; <b>S4</b></td></tr>
+<tr><td class="w-st">S3</td><td class="w-ac ac-n">否</td><td class="tx">b &rarr; <b>S2</b><br>c &rarr; <b>S3</b><br>d &rarr; <b>S4</b></td></tr>
+<tr><td class="w-st">S4</td><td class="w-ac ac-y">是</td><td class="tx">&mdash;</td></tr>
+</tbody>
+</table>
+<h3>DFA 最小化后 &mdash; 3 个状态</h3>
+<table><thead><tr><th class="w-st">状态</th><th class="w-ac">接受?</th><th>转移</th></tr></thead>
+<tbody>
+<tr><td class="w-st">S0</td><td class="w-ac ac-n">否</td><td class="tx">a &rarr; <b>S2</b></td></tr>
+<tr><td class="w-st">S1</td><td class="w-ac ac-y">是</td><td class="tx">&mdash;</td></tr>
+<tr><td class="w-st">S2</td><td class="w-ac ac-n">否</td><td class="tx">b-c &rarr; <b>S2</b><br>d &rarr; <b>S1</b></td></tr>
+</tbody>
+</table>
+<h2>(a|b)*abb</h2>
+<div class="card-row"><div class="card"><div class="card-num">14</div><div class="card-lbl">NFA 状态数</div></div><div class="card"><div class="card-num">5</div><div class="card-lbl">DFA 最小化前状态数</div></div><div class="card"><div class="card-num">4</div><div class="card-lbl">DFA 最小化后状态数</div></div></div>
+<h3>DFA 最小化前 &mdash; 5 个状态</h3>
+<table><thead><tr><th class="w-st">状态</th><th class="w-ac">接受?</th><th>转移</th></tr></thead>
+<tbody>
+<tr><td class="w-st">S0</td><td class="w-ac ac-n">否</td><td class="tx">a &rarr; <b>S1</b><br>b &rarr; <b>S2</b></td></tr>
+<tr><td class="w-st">S1</td><td class="w-ac ac-n">否</td><td class="tx">a &rarr; <b>S1</b><br>b &rarr; <b>S3</b></td></tr>
+<tr><td class="w-st">S2</td><td class="w-ac ac-n">否</td><td class="tx">a &rarr; <b>S1</b><br>b &rarr; <b>S2</b></td></tr>
+<tr><td class="w-st">S3</td><td class="w-ac ac-n">否</td><td class="tx">a &rarr; <b>S1</b><br>b &rarr; <b>S4</b></td></tr>
+<tr><td class="w-st">S4</td><td class="w-ac ac-y">是</td><td class="tx">a &rarr; <b>S1</b><br>b &rarr; <b>S2</b></td></tr>
+</tbody>
+</table>
+<h3>DFA 最小化后 &mdash; 4 个状态</h3>
+<table><thead><tr><th class="w-st">状态</th><th class="w-ac">接受?</th><th>转移</th></tr></thead>
+<tbody>
+<tr><td class="w-st">S0</td><td class="w-ac ac-n">否</td><td class="tx">a &rarr; <b>S0</b><br>b &rarr; <b>S2</b></td></tr>
+<tr><td class="w-st">S1</td><td class="w-ac ac-y">是</td><td class="tx">a &rarr; <b>S0</b><br>b &rarr; <b>S3</b></td></tr>
+<tr><td class="w-st">S2</td><td class="w-ac ac-n">否</td><td class="tx">a &rarr; <b>S0</b><br>b &rarr; <b>S1</b></td></tr>
+<tr><td class="w-st">S3</td><td class="w-ac ac-n">否</td><td class="tx">a &rarr; <b>S0</b><br>b &rarr; <b>S3</b></td></tr>
+</tbody>
+</table>
+<h2>\d{3}-\d{4}</h2>
+<div class="card-row"><div class="card"><div class="card-num">16</div><div class="card-lbl">NFA 状态数</div></div><div class="card"><div class="card-num">9</div><div class="card-lbl">DFA 最小化前状态数</div></div><div class="card"><div class="card-num">9</div><div class="card-lbl">DFA 最小化后状态数</div></div></div>
+<h3>DFA 最小化前 &mdash; 9 个状态</h3>
+<table><thead><tr><th class="w-st">状态</th><th class="w-ac">接受?</th><th>转移</th></tr></thead>
+<tbody>
+<tr><td class="w-st">S0</td><td class="w-ac ac-n">否</td><td class="tx">0-9 &rarr; <b>S1</b></td></tr>
+<tr><td class="w-st">S1</td><td class="w-ac ac-n">否</td><td class="tx">0-9 &rarr; <b>S2</b></td></tr>
+<tr><td class="w-st">S2</td><td class="w-ac ac-n">否</td><td class="tx">0-9 &rarr; <b>S3</b></td></tr>
+<tr><td class="w-st">S3</td><td class="w-ac ac-n">否</td><td class="tx">- &rarr; <b>S4</b></td></tr>
+<tr><td class="w-st">S4</td><td class="w-ac ac-n">否</td><td class="tx">0-9 &rarr; <b>S5</b></td></tr>
+<tr><td class="w-st">S5</td><td class="w-ac ac-n">否</td><td class="tx">0-9 &rarr; <b>S6</b></td></tr>
+<tr><td class="w-st">S6</td><td class="w-ac ac-n">否</td><td class="tx">0-9 &rarr; <b>S7</b></td></tr>
+<tr><td class="w-st">S7</td><td class="w-ac ac-n">否</td><td class="tx">0-9 &rarr; <b>S8</b></td></tr>
+<tr><td class="w-st">S8</td><td class="w-ac ac-y">是</td><td class="tx">&mdash;</td></tr>
+</tbody>
+</table>
+<h3>DFA 最小化后 &mdash; 9 个状态</h3>
+<table><thead><tr><th class="w-st">状态</th><th class="w-ac">接受?</th><th>转移</th></tr></thead>
+<tbody>
+<tr><td class="w-st">S0</td><td class="w-ac ac-n">否</td><td class="tx">- &rarr; <b>S8</b></td></tr>
+<tr><td class="w-st">S1</td><td class="w-ac ac-y">是</td><td class="tx">&mdash;</td></tr>
+<tr><td class="w-st">S2</td><td class="w-ac ac-n">否</td><td class="tx">0-9 &rarr; <b>S0</b></td></tr>
+<tr><td class="w-st">S3</td><td class="w-ac ac-n">否</td><td class="tx">0-9 &rarr; <b>S1</b></td></tr>
+<tr><td class="w-st">S4</td><td class="w-ac ac-n">否</td><td class="tx">0-9 &rarr; <b>S2</b></td></tr>
+<tr><td class="w-st">S5</td><td class="w-ac ac-n">否</td><td class="tx">0-9 &rarr; <b>S3</b></td></tr>
+<tr><td class="w-st">S6</td><td class="w-ac ac-n">否</td><td class="tx">0-9 &rarr; <b>S4</b></td></tr>
+<tr><td class="w-st">S7</td><td class="w-ac ac-n">否</td><td class="tx">0-9 &rarr; <b>S5</b></td></tr>
+<tr><td class="w-st">S8</td><td class="w-ac ac-n">否</td><td class="tx">0-9 &rarr; <b>S7</b></td></tr>
+</tbody>
+</table>
+<h2>\w+@\w+\.\w+</h2>
+<div class="card-row"><div class="card"><div class="card-num">16</div><div class="card-lbl">NFA 状态数</div></div><div class="card"><div class="card-num">6</div><div class="card-lbl">DFA 最小化前状态数</div></div><div class="card"><div class="card-num">6</div><div class="card-lbl">DFA 最小化后状态数</div></div></div>
+<h3>DFA 最小化前 &mdash; 6 个状态</h3>
+<table><thead><tr><th class="w-st">状态</th><th class="w-ac">接受?</th><th>转移</th></tr></thead>
+<tbody>
+<tr><td class="w-st">S0</td><td class="w-ac ac-n">否</td><td class="tx">0-9,A-Z,_,a-z &rarr; <b>S1</b></td></tr>
+<tr><td class="w-st">S1</td><td class="w-ac ac-n">否</td><td class="tx">0-9,A-Z,_,a-z &rarr; <b>S1</b><br>@ &rarr; <b>S2</b></td></tr>
+<tr><td class="w-st">S2</td><td class="w-ac ac-n">否</td><td class="tx">0-9,A-Z,_,a-z &rarr; <b>S3</b></td></tr>
+<tr><td class="w-st">S3</td><td class="w-ac ac-n">否</td><td class="tx">. &rarr; <b>S4</b><br>0-9,A-Z,_,a-z &rarr; <b>S3</b></td></tr>
+<tr><td class="w-st">S4</td><td class="w-ac ac-n">否</td><td class="tx">0-9,A-Z,_,a-z &rarr; <b>S5</b></td></tr>
+<tr><td class="w-st">S5</td><td class="w-ac ac-y">是</td><td class="tx">0-9,A-Z,_,a-z &rarr; <b>S5</b></td></tr>
+</tbody>
+</table>
+<h3>DFA 最小化后 &mdash; 6 个状态</h3>
+<table><thead><tr><th class="w-st">状态</th><th class="w-ac">接受?</th><th>转移</th></tr></thead>
+<tbody>
+<tr><td class="w-st">S0</td><td class="w-ac ac-n">否</td><td class="tx">. &rarr; <b>S3</b><br>0-9,A-Z,_,a-z &rarr; <b>S0</b></td></tr>
+<tr><td class="w-st">S1</td><td class="w-ac ac-y">是</td><td class="tx">0-9,A-Z,_,a-z &rarr; <b>S1</b></td></tr>
+<tr><td class="w-st">S2</td><td class="w-ac ac-n">否</td><td class="tx">0-9,A-Z,_,a-z &rarr; <b>S0</b></td></tr>
+<tr><td class="w-st">S3</td><td class="w-ac ac-n">否</td><td class="tx">0-9,A-Z,_,a-z &rarr; <b>S1</b></td></tr>
+<tr><td class="w-st">S4</td><td class="w-ac ac-n">否</td><td class="tx">0-9,A-Z,_,a-z &rarr; <b>S4</b><br>@ &rarr; <b>S2</b></td></tr>
+<tr><td class="w-st">S5</td><td class="w-ac ac-n">否</td><td class="tx">0-9,A-Z,_,a-z &rarr; <b>S4</b></td></tr>
+</tbody>
+</table>
+<h2>[a-z]+</h2>
+<div class="card-row"><div class="card"><div class="card-num">4</div><div class="card-lbl">NFA 状态数</div></div><div class="card"><div class="card-num">2</div><div class="card-lbl">DFA 最小化前状态数</div></div><div class="card"><div class="card-num">2</div><div class="card-lbl">DFA 最小化后状态数</div></div></div>
+<h3>DFA 最小化前 &mdash; 2 个状态</h3>
+<table><thead><tr><th class="w-st">状态</th><th class="w-ac">接受?</th><th>转移</th></tr></thead>
+<tbody>
+<tr><td class="w-st">S0</td><td class="w-ac ac-n">否</td><td class="tx">a-z &rarr; <b>S1</b></td></tr>
+<tr><td class="w-st">S1</td><td class="w-ac ac-y">是</td><td class="tx">a-z &rarr; <b>S1</b></td></tr>
+</tbody>
+</table>
+<h3>DFA 最小化后 &mdash; 2 个状态</h3>
+<table><thead><tr><th class="w-st">状态</th><th class="w-ac">接受?</th><th>转移</th></tr></thead>
+<tbody>
+<tr><td class="w-st">S0</td><td class="w-ac ac-n">否</td><td class="tx">a-z &rarr; <b>S1</b></td></tr>
+<tr><td class="w-st">S1</td><td class="w-ac ac-y">是</td><td class="tx">a-z &rarr; <b>S1</b></td></tr>
+</tbody>
+</table>
+<h2>a+</h2>
+<div class="card-row"><div class="card"><div class="card-num">4</div><div class="card-lbl">NFA 状态数</div></div><div class="card"><div class="card-num">2</div><div class="card-lbl">DFA 最小化前状态数</div></div><div class="card"><div class="card-num">2</div><div class="card-lbl">DFA 最小化后状态数</div></div></div>
+<h3>DFA 最小化前 &mdash; 2 个状态</h3>
+<table><thead><tr><th class="w-st">状态</th><th class="w-ac">接受?</th><th>转移</th></tr></thead>
+<tbody>
+<tr><td class="w-st">S0</td><td class="w-ac ac-n">否</td><td class="tx">a &rarr; <b>S1</b></td></tr>
+<tr><td class="w-st">S1</td><td class="w-ac ac-y">是</td><td class="tx">a &rarr; <b>S1</b></td></tr>
+</tbody>
+</table>
+<h3>DFA 最小化后 &mdash; 2 个状态</h3>
+<table><thead><tr><th class="w-st">状态</th><th class="w-ac">接受?</th><th>转移</th></tr></thead>
+<tbody>
+<tr><td class="w-st">S0</td><td class="w-ac ac-n">否</td><td class="tx">a &rarr; <b>S1</b></td></tr>
+<tr><td class="w-st">S1</td><td class="w-ac ac-y">是</td><td class="tx">a &rarr; <b>S1</b></td></tr>
+</tbody>
+</table>
+<h2>(ab|cd|ef)+</h2>
+<div class="card-row"><div class="card"><div class="card-num">18</div><div class="card-lbl">NFA 状态数</div></div><div class="card"><div class="card-num">7</div><div class="card-lbl">DFA 最小化前状态数</div></div><div class="card"><div class="card-num">5</div><div class="card-lbl">DFA 最小化后状态数</div></div></div>
+<h3>DFA 最小化前 &mdash; 7 个状态</h3>
+<table><thead><tr><th class="w-st">状态</th><th class="w-ac">接受?</th><th>转移</th></tr></thead>
+<tbody>
+<tr><td class="w-st">S0</td><td class="w-ac ac-n">否</td><td class="tx">a &rarr; <b>S1</b><br>c &rarr; <b>S2</b><br>e &rarr; <b>S3</b></td></tr>
+<tr><td class="w-st">S1</td><td class="w-ac ac-n">否</td><td class="tx">b &rarr; <b>S4</b></td></tr>
+<tr><td class="w-st">S2</td><td class="w-ac ac-n">否</td><td class="tx">d &rarr; <b>S5</b></td></tr>
+<tr><td class="w-st">S3</td><td class="w-ac ac-n">否</td><td class="tx">f &rarr; <b>S6</b></td></tr>
+<tr><td class="w-st">S4</td><td class="w-ac ac-y">是</td><td class="tx">a &rarr; <b>S1</b><br>c &rarr; <b>S2</b><br>e &rarr; <b>S3</b></td></tr>
+<tr><td class="w-st">S5</td><td class="w-ac ac-y">是</td><td class="tx">a &rarr; <b>S1</b><br>c &rarr; <b>S2</b><br>e &rarr; <b>S3</b></td></tr>
+<tr><td class="w-st">S6</td><td class="w-ac ac-y">是</td><td class="tx">a &rarr; <b>S1</b><br>c &rarr; <b>S2</b><br>e &rarr; <b>S3</b></td></tr>
+</tbody>
+</table>
+<h3>DFA 最小化后 &mdash; 5 个状态</h3>
+<table><thead><tr><th class="w-st">状态</th><th class="w-ac">接受?</th><th>转移</th></tr></thead>
+<tbody>
+<tr><td class="w-st">S0</td><td class="w-ac ac-n">否</td><td class="tx">a &rarr; <b>S2</b><br>c &rarr; <b>S3</b><br>e &rarr; <b>S4</b></td></tr>
+<tr><td class="w-st">S1</td><td class="w-ac ac-y">是</td><td class="tx">a &rarr; <b>S2</b><br>c &rarr; <b>S3</b><br>e &rarr; <b>S4</b></td></tr>
+<tr><td class="w-st">S2</td><td class="w-ac ac-n">否</td><td class="tx">b &rarr; <b>S1</b></td></tr>
+<tr><td class="w-st">S3</td><td class="w-ac ac-n">否</td><td class="tx">d &rarr; <b>S1</b></td></tr>
+<tr><td class="w-st">S4</td><td class="w-ac ac-n">否</td><td class="tx">f &rarr; <b>S1</b></td></tr>
+</tbody>
+</table>
+<h2>a?b?c?</h2>
+<div class="card-row"><div class="card"><div class="card-num">12</div><div class="card-lbl">NFA 状态数</div></div><div class="card"><div class="card-num">4</div><div class="card-lbl">DFA 最小化前状态数</div></div><div class="card"><div class="card-num">2</div><div class="card-lbl">DFA 最小化后状态数</div></div></div>
+<h3>DFA 最小化前 &mdash; 4 个状态</h3>
+<table><thead><tr><th class="w-st">状态</th><th class="w-ac">接受?</th><th>转移</th></tr></thead>
+<tbody>
+<tr><td class="w-st">S0</td><td class="w-ac ac-y">是</td><td class="tx">a &rarr; <b>S1</b><br>b &rarr; <b>S2</b><br>c &rarr; <b>S3</b></td></tr>
+<tr><td class="w-st">S1</td><td class="w-ac ac-y">是</td><td class="tx">b &rarr; <b>S2</b><br>c &rarr; <b>S3</b></td></tr>
+<tr><td class="w-st">S2</td><td class="w-ac ac-y">是</td><td class="tx">c &rarr; <b>S3</b></td></tr>
+<tr><td class="w-st">S3</td><td class="w-ac ac-y">是</td><td class="tx">&mdash;</td></tr>
+</tbody>
+</table>
+<h3>DFA 最小化后 &mdash; 2 个状态</h3>
+<table><thead><tr><th class="w-st">状态</th><th class="w-ac">接受?</th><th>转移</th></tr></thead>
+<tbody>
+<tr><td class="w-st">S0</td><td class="w-ac ac-y">是</td><td class="tx">a-c &rarr; <b>S1</b></td></tr>
+<tr><td class="w-st">S1</td><td class="w-ac ac-y">是</td><td class="tx">b-c &rarr; <b>S1</b></td></tr>
+</tbody>
+</table>
+</body>
+</html>
