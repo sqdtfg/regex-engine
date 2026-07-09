@@ -118,6 +118,14 @@ target_link_libraries(regex_benchmark PRIVATE regex_core)
 add_executable(grep_test_runner tests/grep_test_runner.c)
 target_link_libraries(grep_test_runner PRIVATE regex_core)
 
+# 14) posix_benchmark — DFA 性能对比基准
+add_executable(posix_benchmark tests/posix_benchmark.c)
+target_link_libraries(posix_benchmark PRIVATE regex_core)
+
+# 15) dot_gen — NFA/DFA 转换图 + 状态转移表生成
+add_executable(dot_gen tests/dot_gen.c)
+target_link_libraries(dot_gen PRIVATE regex_core)
+
 # ---------- 安装 ----------
 install(TARGETS regex_core
     ARCHIVE DESTINATION lib

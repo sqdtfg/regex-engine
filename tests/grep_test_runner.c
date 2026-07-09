@@ -126,7 +126,7 @@ static int run_one_test(const char *status_str, const char *regex,
 
 int main(int argc, char **argv) {
     if (argc < 3) {
-        fprintf(stderr, "用法: %s <tests_file> <bre|ere>\n", argv[0]);
+        fprintf(stderr, "Usage: %s <tests_file> <bre|ere>\n", argv[0]);
         return 1;
     }
 
