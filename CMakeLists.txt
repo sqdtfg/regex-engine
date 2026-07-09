@@ -1,34 +1,21 @@
 # ==============================================================================
 # 正则表达式引擎（NFA/DFA 双模式）
 # ==============================================================================
-# 课程：AI辅助C语言实践 · 题目09 · 两人小组
-#
-# 项目结构：
-#   include/         头文件（dfa.h, nfa.h, parser.h, tokenizer.h, hopcroft.h, ...）
-#   src/             源文件
-#     dfa.c          子集构造法（NFA → DFA）
-#     nfa.c          Thompson 构造法（AST → NFA）
-#     parser.c       递归下降语法解析器
-#     tokenizer.c    词法分析器（NFA-state → token）
-#     hopcroft.c     Hopcroft DFA 最小化
-#     matcher.c      DFA 匹配器（精确/子串/全局）
-#     capture.c      捕获组支持
-#     main.c         演示主程序
-#   tests/           单元测试
-#     test_tokenizer.c / test_parser.c / test_nfa.c /
-#     test_dfa.c / test_hopcroft.c
+# 课程：AI辅助C语言实践
+# 架构：Tokenizer → Parser → NFA (Thompson) → DFA (Subset Construction)
+#       → Hopcroft Minimize → 匹配
 #
 # 构建步骤（Windows PowerShell）：
-#   cd regex-engine
 #   mkdir build && cd build
 #   cmake .. -G "MinGW Makefiles"
 #   cmake --build .
 #
-# 运行：
-#   cmake --build . --target run_tests  # 一键运行全部测试
-#   ./bin/regex_engine                  # 交互式演示
-#   ./bin/regex_engine "a*b" "aaab"     # 命令行参数模式
-#   ./bin/regex_hopcroft_test           # 最小化单元测试
+# 一键运行目标：
+#   cmake --build . --target run_tests       # 运行全部单元测试
+#   cmake --build . --target run_grep_tests  # Spencer ERE 测试
+#   cmake --build . --target run_benchmark   # 性能基准
+#   cmake --build . --target run_perf_compare # DFA vs POSIX 对比
+#   cmake --build . --target run_dotgen      # 生成 NFA/DFA 图
 # ==============================================================================
 
 cmake_minimum_required(VERSION 3.16)
