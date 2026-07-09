@@ -8,6 +8,7 @@
 #include "matcher.h"
 #include "nfa.h"
 #include "parser.h"
+#include "hopcroft.h"
 
 static char *regex_strdup(const char *s) {
     size_t len;
@@ -96,6 +97,9 @@ regex_t *regex_compile(const char *pattern, int flags) {
         regex_free(prog);
         return NULL;
     }
+
+    /* Hopcroft 最小化 — 减少状态数，提升后续匹配速度 */
+    dfa_minimize(&prog->dfa);
 
     regex_set_error(prog, REGEX_OK, NULL);
     return prog;

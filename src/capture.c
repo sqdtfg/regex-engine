@@ -149,18 +149,26 @@ static int collect_group_metas_recursive(const ASTNode *node, int next_id,
 /* ========================================================================== */
 
 /**
- * 从子 AST 构建独立 DFA，在文本的 [text_start, text_start + text_len)
- * 区间内做最长匹配（贪婪）。
+ * 从子 AST 构建独立 DFA，在文本区间内做最长匹配（贪婪），POSIX 语义。
  *
- * 策略：从 text_start 开始逐字符驱动子 DFA，记录最后一个接受状态的位置。
- * 返回匹配长度（从 text_start 算起的偏移），0 表示无匹配。
+ * 策略：从区间内每个起始位置尝试驱动子 DFA，记录全局最长匹配的位置。
+ * 这确保像 (a+)(b+) 中 b+ 子组能在 "aaabbb" 的 "bbb" 部分正确匹配，
+ * 即使从区间起点开始 b+ 无法匹配。
  *
- * 这与 POSIX regexec 的贪婪语义一致：对于可重复量词，取最长匹配。
+ * @param sub_ast     子表达式的 AST
+ * @param text        完整输入文本
+ * @param text_start  搜索区间的起始偏移（相对于 text）
+ * @param text_len    搜索区间的长度
+ * @param out_start   输出: 匹配在 text 中的绝对起始偏移（仅当返回值 > 0 时有效）
+ * @return            匹配长度（0 = 未匹配）
  */
 static size_t match_sub_dfa_greedy(ASTNode *sub_ast,
                                     const char *text,
                                     size_t text_start,
-                                    size_t text_len) {
+                                    size_t text_len,
+                                    size_t *out_start)
+{
+    if (out_start) *out_start = text_start;
     if (!sub_ast || text_len == 0) return 0;
 
     /* 从子 AST 构建 NFA */
@@ -178,42 +186,54 @@ static size_t match_sub_dfa_greedy(ASTNode *sub_ast,
     }
 
     /* 在区间 [text_start, text_start + text_len) 内做最长匹配 */
-    const char *text_end = text + text_start + text_len;
-    const char *p = text + text_start;
-    int current_state = sub_dfa.start_state;
-    size_t last_accept = 0;
+    const char *text_base = text + text_start;
+    size_t global_best_len = 0;
+    size_t global_best_start = 0;
 
-    /* 从区间起点开始扫描，记录最后一个接受状态的位置（最长匹配） */
-    while (p < text_end) {
-        int idx = (unsigned char)*p;
+    /* 对区间内每个起始位置，扫描到区间末尾，记录最长匹配 */
+    for (size_t s = 0; s < text_len; s++) {
+        int current_state = sub_dfa.start_state;
+        size_t pos = s;
+        size_t last_accept = s;
 
-        /* 检查当前状态是否是接受状态 */
+        /* 检查起始状态是否为接受状态（如空匹配 a*） */
         if (sub_dfa.states[current_state].is_accept) {
-            last_accept = (size_t)(p - text);
+            last_accept = s;
         }
 
-        int next_state = sub_dfa.states[current_state].transitions[idx];
-        if (next_state == -1) {
-            break;
+        while (pos < text_len) {
+            if (sub_dfa.states[current_state].is_accept && (pos - s) > (last_accept - s)) {
+                last_accept = pos;
+            }
+
+            int idx = (unsigned char)text_base[pos];
+            int next_state = sub_dfa.states[current_state].transitions[idx];
+            if (next_state == -1) {
+                break;
+            }
+
+            current_state = next_state;
+            pos++;
         }
 
-        current_state = next_state;
-        p++;
-    }
+        /* 检查最终位置是否是接受状态 */
+        if (sub_dfa.states[current_state].is_accept && (pos - s) > (last_accept - s)) {
+            last_accept = pos;
+        }
 
-    /* 检查最终位置是否是接受状态 */
-    if (sub_dfa.states[current_state].is_accept) {
-        last_accept = (size_t)(p - text);
+        size_t len = last_accept - s;
+        if (len > global_best_len) {
+            global_best_len = len;
+            global_best_start = s;
+        }
     }
 
     dfa_free(&sub_dfa);
 
-    /* 返回相对偏移（从 text_start 算起） */
-    /* 注意：last_accept 可能是 text_start（空匹配），此时返回 0 表示匹配了 0 个字符 */
-    if (last_accept >= text_start) {
-        return last_accept - text_start;
+    if (global_best_len > 0 && out_start) {
+        *out_start = text_start + global_best_start;
     }
-    return 0;
+    return global_best_len;
 }
 
 /* ========================================================================== */
@@ -373,18 +393,20 @@ CapturedMatch dfa_match_captured(const DFAMachine *dfa, const char *input) {
             size_t sub_len = full_match.length;
             if (sub_len == 0) continue;
 
-            /* 子表达式在区间内的匹配长度（相对偏移） */
+            /* 子表达式在区间内的匹配（返回长度和绝对起始位置） */
+            size_t sub_start = 0;
             size_t sub_len_matched = match_sub_dfa_greedy(
                 meta->sub_ast,
                 input,
                 full_match.start,
-                sub_len
+                sub_len,
+                &sub_start
             );
 
             if (sub_len_matched > 0) {
                 result.groups[i].matched = 1;
-                result.groups[i].start = full_match.start;
-                result.groups[i].end = full_match.start + sub_len_matched;
+                result.groups[i].start = sub_start;
+                result.groups[i].end = sub_start + sub_len_matched;
                 result.groups[i].length = sub_len_matched;
             }
         }

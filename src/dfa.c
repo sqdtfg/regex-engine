@@ -330,6 +330,8 @@ DFAMachine dfa_from_nfa(const NFAGraph *nfa) {
     dfa.states      = dfa_states;
     dfa.state_count = dfa_count;
     dfa.start_state = 0;
+    dfa.has_anchor_start = nfa->has_anchor_start;
+    dfa.has_anchor_end   = nfa->has_anchor_end;
 
     /* ---- 释放临时集合 ---- */
 oom:

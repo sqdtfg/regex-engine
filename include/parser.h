@@ -20,6 +20,8 @@ typedef enum {
     AST_QUESTION,       /* 问号 a?         — 一元 */
     AST_CURLY,          /* 量词 a{m,n}     — 一元 */
     AST_GROUP,          /* 括号 (a)        — 一元（捕获组） */
+    AST_ANCHOR_START,   /* 行首锚定 ^      — 零宽度断言 */
+    AST_ANCHOR_END,     /* 行尾锚定 $      — 零宽度断言 */
 } ASTNodeType;
 
 /* 前向声明 */

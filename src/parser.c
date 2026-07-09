@@ -112,6 +112,22 @@ static ASTNode *parse_atom(Parser *p) {
         return node;
     }
 
+    /* ---- 行首锚定 ^ ---- */
+    if (tok.type == TOK_CARET) {
+        advance(p);
+        ASTNode *node = ast_node_new(AST_ANCHOR_START);
+        node->pos = tok.pos;
+        return node;
+    }
+
+    /* ---- 行尾锚定 $ ---- */
+    if (tok.type == TOK_DOLLAR) {
+        advance(p);
+        ASTNode *node = ast_node_new(AST_ANCHOR_END);
+        node->pos = tok.pos;
+        return node;
+    }
+
     /* ---- 括号 '(' regex ')' ---- */
     if (tok.type == TOK_LPAREN) {
         advance(p);                                 /* 消费 '(' */
@@ -205,7 +221,7 @@ static ASTNode *parse_factor(Parser *p) {
 /*  连接是并排放置，没有任何分隔符。连续多个因子 = 连接。                              */
 /*  当 lookahead 是一个原子的开头时，继续拼接。                                    */
 /*                                                                             */
-/*  原子开头 = { TOK_CHAR, TOK_DOT, TOK_ESCAPE, TOK_BRACKET, TOK_LPAREN }       */
+/*  原子开头 = { TOK_CHAR, TOK_DOT, TOK_ESCAPE, TOK_BRACKET, TOK_LPAREN, TOK_CARET, TOK_DOLLAR }       */
 /* ========================================================================== */
 
 static ASTNode *parse_chain(Parser *p) {
@@ -220,7 +236,8 @@ static ASTNode *parse_chain(Parser *p) {
         /* 判断下一个 token 是不是因子的开头 */
         int is_atom_start = (t == TOK_CHAR || t == TOK_DOT ||
                              t == TOK_ESCAPE || t == TOK_BRACKET ||
-                             t == TOK_LPAREN);
+                             t == TOK_LPAREN || t == TOK_CARET ||
+                             t == TOK_DOLLAR);
 
         if (!is_atom_start) break;          /* 不是因子开头 → 连接结束 */
 
@@ -348,6 +365,8 @@ const char *ast_type_name(ASTNodeType type) {
         case AST_QUESTION:  return "问号量词";
         case AST_CURLY:     return "范围量词";
         case AST_GROUP:     return "捕获组";
+        case AST_ANCHOR_START: return "行首锚定";
+        case AST_ANCHOR_END:   return "行尾锚定";
         default:            return "未知节点";
     }
 }
@@ -367,6 +386,8 @@ static void print_data(const ASTNode *node) {
             else if (node->quant_min == node->quant_max) printf(" {%d}", node->quant_min);
             else    printf(" {%d,%d}", node->quant_min, node->quant_max);
             break;
+        case AST_ANCHOR_START: printf(" ^"); break;
+        case AST_ANCHOR_END:   printf(" $"); break;
         default: break;
     }
 }

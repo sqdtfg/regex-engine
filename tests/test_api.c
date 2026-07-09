@@ -323,7 +323,7 @@ static void test_complex_patterns(void) {
         CHECK_INT_EQ(1, ret, "complex: 邮箱匹配");
         if (ret) {
             CHECK_SIZE_T_EQ(0, r.start, "complex: 起点 0");
-            CHECK_SIZE_T_EQ(14, r.end, "complex: 终点 14");
+            CHECK_SIZE_T_EQ(16, r.end, "complex: 终点 16");
         }
         regex_free(prog);
     }

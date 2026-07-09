@@ -64,6 +64,8 @@ typedef struct {
     NFAState *end;          /* 接受状态 */
     int state_count;        /* 状态总数 */
     NFAState **states;      /* 所有状态的指针数组（用于释放） */
+    int has_anchor_start;   /* 模式以 ^ 开头 */
+    int has_anchor_end;     /* 模式以 $ 结尾 */
 } NFAGraph;
 
 /* ========================================================================== */

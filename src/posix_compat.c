@@ -23,6 +23,7 @@
 
 #include "api.h"
 #include "capture.h"
+#include "nfa.h"
 #include "parser.h"
 
 /* -------------------------------------------------------------------------- */
@@ -106,50 +107,72 @@ int regcomp(regex_prog_t *prog, const char *pattern, int cflags) {
         /* TODO: 不是行尾 */
     }
 
-    regex_t *internal = regex_compile(pattern, REGEX_FLAG_NONE);
-    if (!internal) {
-        memset(prog, 0, sizeof(*prog));
-        prog->re_errcode = REG_BADPAT;
-        strncpy(prog->re_errmsg, "compile failed (invalid pattern)",
-                sizeof(prog->re_errmsg) - 1);
-        return REG_BADPAT;
-    }
+    regex_prog_t temp = {0};
+    temp.re_flags = cflags;
 
-    prog->re_flags = cflags;
-    prog->re_errcode = 0;
-    prog->re_errmsg[0] = '\0';
-    prog->internal = internal;
-
-    /* 构建带捕获组信息的 DFA */
+    /* 一次解析，AST 复用 — 避免 regcomp 中重复解析同一模式 */
     {
         Parser parser;
         parser_init(&parser, pattern);
         ASTNode *ast = parser_parse(&parser);
-        if (ast) {
-            DFAMachine cap_dfa = dfa_from_ast_with_groups(ast);
-            ast_free(ast);
-            if (cap_dfa.states) {
-                /* 分配堆内存存储 DFAMachine 结构体 */
-                DFAMachine *heap_dfa = (DFAMachine *)malloc(sizeof(*heap_dfa));
-                if (heap_dfa) {
-                    *heap_dfa = cap_dfa;
-                    prog->capture_dfa = heap_dfa;
-                    prog->nsub = count_capture_groups(pattern);
+
+        if (!ast) {
+            snprintf(temp.re_errmsg, sizeof(temp.re_errmsg),
+                     "parse error: %s", parser.error_msg);
+            temp.re_errcode = REG_BADPAT;
+            *prog = temp;
+            return REG_BADPAT;
+        }
+
+        /* 构建基础 NFA → DFA（供 regex_search 回退路径使用） */
+        NFAGraph nfa = nfa_from_ast(ast);
+        if (nfa.start && nfa.end && nfa.states && nfa.state_count > 0) {
+            DFAMachine dfa = dfa_from_nfa(&nfa);
+            nfa_free(&nfa);
+            if (dfa.states && dfa.state_count > 0) {
+                regex_t *internal = (regex_t *)calloc(1, sizeof(*internal));
+                if (internal) {
+                    internal->dfa = dfa;
+                    internal->flags = REGEX_FLAG_NONE;
+                    internal->error_code = REGEX_OK;
+                    internal->pattern = strdup(pattern);
+                    temp.internal = internal;
                 } else {
-                    dfa_free(&cap_dfa);
-                    prog->capture_dfa = NULL;
-                    prog->nsub = 0;
+                    dfa_free(&dfa);
+                    temp.re_errcode = REG_ESPACE;
+                    snprintf(temp.re_errmsg, sizeof(temp.re_errmsg),
+                             "out of memory");
+                    ast_free(ast);
+                    *prog = temp;
+                    return REG_ESPACE;
                 }
             } else {
-                prog->capture_dfa = NULL;
-                prog->nsub = 0;
+                nfa_free(&nfa);
+                dfa_free(&dfa);
             }
         } else {
-            prog->capture_dfa = NULL;
-            prog->nsub = 0;
+            nfa_free(&nfa);
         }
+
+        /* 从同一个 AST 构建带捕获组信息的 DFA */
+        DFAMachine cap_dfa = dfa_from_ast_with_groups(ast);
+        if (cap_dfa.states) {
+            DFAMachine *heap_dfa = (DFAMachine *)malloc(sizeof(*heap_dfa));
+            if (heap_dfa) {
+                *heap_dfa = cap_dfa;
+                temp.capture_dfa = heap_dfa;
+                temp.nsub = count_capture_groups(pattern);
+            } else {
+                dfa_free(&cap_dfa);
+            }
+        }
+
+        ast_free(ast);
     }
 
+    temp.re_errcode = 0;
+    temp.re_errmsg[0] = '\0';
+    *prog = temp;
     return REG_OK;
 }
 
@@ -170,13 +193,10 @@ int regexec(const regex_prog_t *prog, const char *string,
     }
 
     /* REG_NOSUB：不需要匹配位置信息，只需判断是否匹配 */
-    /* POSIX regexec 语义是找最左最长子串匹配，因此先用 regex_search */
+    /* POSIX regexec 语义是找最左最长子串匹配，统一使用 dfa_match（已修复为最长匹配） */
     if (eflags & REG_NOSUB) {
         MatchResult m = {0};
         int matched = regex_search(internal, string, &m);
-        if (!matched) {
-            matched = regex_match(internal, string, &m);
-        }
         return matched ? 0 : REG_NOMATCH;
     }
 
@@ -222,7 +242,7 @@ int regexec(const regex_prog_t *prog, const char *string,
 
     if (!matched) {
         /* 子串也未匹配，尝试精确全串匹配 */
-        matched = regex_match(internal, string, &m);
+        matched = internal ? regex_match(internal, string, &m) : 0;
     }
 
     if (!matched) {

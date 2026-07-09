@@ -39,6 +39,11 @@ typedef struct {
 /** 初始化状态数组 */
 static void vec_init(StateVec *v) {
     v->data     = malloc(NFA_STATE_CAP * sizeof(NFAState *));
+    if (!v->data) {
+        v->count    = 0;
+        v->capacity = 0;
+        return;
+    }
     v->count    = 0;
     v->capacity = NFA_STATE_CAP;
 }
@@ -353,6 +358,24 @@ static NFAFragment build_frag(const ASTNode *node, StateVec *vec) {
     case AST_GROUP:
         return build_frag(node->left, vec);
 
+    /* ============================================================== */
+    /*  锚定 ^ / $ — 零宽度断言，用一条 ε 边实现                       */
+    /*                                                                  */
+    /*  NFA 层面用 ε 边透传：锚点约束在 DFA 构造阶段通过 start/end  */
+    /*  位置检查来实现，NFA 本身不做区分。                               */
+    /* ============================================================== */
+    case AST_ANCHOR_START:
+    case AST_ANCHOR_END:
+    {
+        /* 零宽度断言，语义上等同于一条 ε 边 */
+        NFAState *s = state_new(vec->count);  vec_push(vec, s);
+        NFAState *e = state_new(vec->count);  vec_push(vec, e);
+        s->edge1_type = NFA_EDGE_EPSILON;
+        s->edge1_next = e;
+        NFAFragment f = { s, e };
+        return f;
+    }
+
     /* ---- 防御：遇到未知类型返回空片段 ---- */
     default: {
         NFAFragment f = { NULL, NULL };
@@ -378,9 +401,31 @@ static NFAFragment build_frag(const ASTNode *node, StateVec *vec) {
  *                  当 ast_root 为 NULL 时返回全零结构。
  *                  调用者最终必须调用 nfa_free() 释放。
  */
+/**
+ * 递归遍历 AST，检测最左/最右叶是否为锚定节点。
+ * CONCAT 的左结合性意味着锚定可能被套多层 CONCAT。
+ */
+static int ast_has_leftmost_anchor(const ASTNode *node) {
+    if (!node) return 0;
+    if (node->type == AST_ANCHOR_START) return 1;
+    if (node->type == AST_CONCAT) return ast_has_leftmost_anchor(node->left);
+    return 0;
+}
+
+static int ast_has_rightmost_anchor(const ASTNode *node) {
+    if (!node) return 0;
+    if (node->type == AST_ANCHOR_END) return 1;
+    if (node->type == AST_CONCAT) return ast_has_rightmost_anchor(node->right);
+    return 0;
+}
+
 NFAGraph nfa_from_ast(const ASTNode *ast_root) {
     NFAGraph nfa = {0};
     if (!ast_root) return nfa;
+
+    /* 检测最左/最右锚定 */
+    nfa.has_anchor_start = ast_has_leftmost_anchor(ast_root);
+    nfa.has_anchor_end   = ast_has_rightmost_anchor(ast_root);
 
     StateVec vec;
     vec_init(&vec);

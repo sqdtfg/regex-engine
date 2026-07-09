@@ -36,6 +36,8 @@ typedef struct {
     DFAState *states;           /* 动态状态数组 */
     int state_count;            /* 状态总数 */
     int start_state;            /* 起始状态 id */
+    int has_anchor_start;       /* 模式以 ^ 开头（仅全串/行首匹配） */
+    int has_anchor_end;         /* 模式以 $ 结尾（仅全串/行尾匹配） */
 } DFAMachine;
 
 /* ========================================================================== */
@@ -55,64 +57,33 @@ typedef struct {
 
 /**
  * 子集构造法：从 NFA 构建 DFA。
- *
- * 算法步骤：
- *   1. ε-closure({nfa.start}) → DFA 状态 0
- *   2. BFS 遍历所有 DFA 状态，对当前状态 S 和每个字符 c∈[0,255]：
- *      a. move(S, c)  → 沿匹配 c 的 NFA 边走一步
- *      b. ε-closure(move(S, c)) → 目标 DFA 状态
- *      c. 若目标状态是新的，追加到 DFA 状态数组末尾
- *      d. 记录转移 S --c--> target
- *   3. 若 DFA 状态中包含 NFA 的 accept 状态，则该 DFA 状态也是 accept
- *
- * @param nfa  完整的 NFA 图（Thompson 构造产物，允许 ε 边）
- * @return     确定化的 DFA 机器（调用者负责调用 dfa_free() 释放）
  */
 DFAMachine dfa_from_nfa(const NFAGraph *nfa);
 
-/**
- * 释放 DFA 机器占用的所有内存。
- * 重复释放同一个对象是安全的（幂等操作）。
- */
+/** 释放 DFA 机器占用的所有内存（幂等） */
 void dfa_free(DFAMachine *dfa);
 
-/**
- * 用 DFA 在输入文本上执行子串匹配（第一个匹配）。
- *
- * 从输入起始位置出发，沿转移表逐字符前进。
- * 一旦到达接受状态即返回（最短匹配语义）。
- * 若当前位置无匹配则从下一位置重试。
- *
- * @param dfa     DFA 机器
- * @param input   待匹配的输入字符串（以 \0 结尾）
- * @return        匹配结果（matched=1 时 start/end/length 有效）
- */
+/* ---- 匹配操作 ---- */
+
+/** DFA 精确匹配：整个输入字符串 */
+MatchResult dfa_match_full(const DFAMachine *dfa, const char *input);
+
+/** DFA 子串匹配：查找输入中第一个匹配的子串（最左最长，POSIX 语义） */
 MatchResult dfa_match(const DFAMachine *dfa, const char *input);
 
-/**
- * 将 DFA 的状态转移表以人类可读的方式打印到 stdout。
- * 仅打印有意义的转移（next_id != -1）。
- *
- * @param dfa  DFA 机器（可为 NULL）
- */
+/** DFA 全局匹配：查找输入中所有匹配的子串 */
+int dfa_match_all(const DFAMachine *dfa, const char *input,
+                  MatchResult *results, int max_results);
+
+/* ---- 可视化 / 调试 ---- */
+
+/** 打印 DFA 状态转移表到 stdout（调试用） */
 void dfa_dump(const DFAMachine *dfa);
 
-/**
- * 将 DFA 的状态转移表输出为 Graphviz DOT 格式（可视化调试用）。
- *
- * @param dfa  DFA 机器
- * @param fp   输出文件（可为 stdout）
- */
+/** 输出 DFA 为 Graphviz DOT 格式（可视化调试用） */
 void dfa_dump_dot(const DFAMachine *dfa, FILE *fp);
 
-/**
- * 将 DFA 状态转移表输出为 Graphviz DOT 文件。
- * 等价于 dfa_dump_dot(dfa, fp)，但接受文件路径。
- *
- * @param dfa       DFA 机器
- * @param filepath  输出文件路径（如 "DOT/dfa_min.dot"）
- * @return          0 = 成功, -1 = 打开文件失败
- */
+/** 输出 DFA 为 Graphviz DOT 文件 */
 int dfa_dump_dot_file(const DFAMachine *dfa, const char *filepath);
 
 #endif /* REGEX_DFA_H */

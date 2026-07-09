@@ -166,6 +166,9 @@ MatchResult dfa_match_full(const DFAMachine *dfa, const char *input) {
         p++;
     }
 
+    /* 精确匹配：所有输入消耗完毕且停在接受状态。
+     * 注意：^ 隐式在 exact match 中通过只检查 start=0 实现；
+     * $ 隐式通过检查 *p == '\0' 实现。 */
     result.start = 0;
     result.end = (size_t)(p - input);
     result.matched = dfa->states[current_state].is_accept && *p == '\0';
@@ -189,17 +192,21 @@ MatchResult dfa_match(const DFAMachine *dfa, const char *input) {
 
     size_t input_len = strlen(input);
 
-    for (size_t start = 0; start <= input_len; start++) {
+    /* 如果模式以 ^ 开头，仅从位置 0 开始尝试匹配 */
+    size_t search_limit = dfa->has_anchor_start ? 0 : input_len;
+
+    /* POSIX 最左最长匹配：对每个起始位置，扫描到输入末尾，
+     * 记录最后一个接受状态的位置（最长匹配），而非遇到第一个接受状态就返回。 */
+    for (size_t start = 0; start <= search_limit; start++) {
         int current_state = dfa->start_state;
         size_t pos = start;
+        size_t best_end = start;  /* 接受状态的最远位置 */
+        int found = 0;
 
         while (pos <= input_len) {
             if (dfa->states[current_state].is_accept) {
-                result.matched = 1;
-                result.start = start;
-                result.end = pos;
-                result.length = pos - start;
-                return result;
+                best_end = pos;
+                found = 1;
             }
 
             if (pos == input_len) {
@@ -214,6 +221,18 @@ MatchResult dfa_match(const DFAMachine *dfa, const char *input) {
 
             current_state = next_state;
             pos++;
+        }
+
+        if (found) {
+            /* 如果模式以 $ 结尾，仅接受匹配到输入末尾的结果 */
+            if (dfa->has_anchor_end && best_end != input_len) {
+                continue;
+            }
+            result.matched = 1;
+            result.start = start;
+            result.end = best_end;
+            result.length = best_end - start;
+            return result;  /* 第一个起始位置的最长匹配 = 最左最长 */
         }
     }
 
