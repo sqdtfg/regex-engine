@@ -1,21 +1,20 @@
 # ==============================================================================
-# 正则表达式引擎（NFA/DFA 双模式）
+# 正则表达式引擎 — Thompson NFA / DFA 双模式
 # ==============================================================================
-# 课程：AI辅助C语言实践
-# 架构：Tokenizer → Parser → NFA (Thompson) → DFA (Subset Construction)
-#       → Hopcroft Minimize → 匹配
+# 架构流水线：
+#   Tokenizer → Parser → NFA (Thompson) → DFA (子集构造) → Hopcroft 最小化 → 匹配
 #
 # 构建步骤（Windows PowerShell）：
 #   mkdir build && cd build
 #   cmake .. -G "MinGW Makefiles"
 #   cmake --build .
 #
-# 一键运行目标：
-#   cmake --build . --target run_tests       # 运行全部单元测试
-#   cmake --build . --target run_grep_tests  # Spencer ERE 测试
-#   cmake --build . --target run_benchmark   # 性能基准
-#   cmake --build . --target run_perf_compare # DFA vs POSIX 对比
-#   cmake --build . --target run_dotgen      # 生成 NFA/DFA 图
+# 一键目标（在 build/ 目录下执行）：
+#   cmake --build . --target run_tests        # 全部 9 套单元测试 (676+ 项)
+#   cmake --build . --target run_grep_tests   # Spencer ERE 测试 (221 用例)
+#   cmake --build . --target run_benchmark    # DFA 性能基准 (编译管道 + 匹配)
+#   cmake --build . --target run_perf_compare # DFA vs POSIX 等效性能对比
+#   cmake --build . --target run_dotgen       # 生成 NFA/DFA 转换图和状态转移表
 # ==============================================================================
 
 cmake_minimum_required(VERSION 3.16)
