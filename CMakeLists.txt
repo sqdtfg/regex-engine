@@ -96,32 +96,22 @@ target_link_libraries(regex_api_test PRIVATE regex_core)
 add_executable(regex_posix_test tests/test_posix_compat.c)
 target_link_libraries(regex_posix_test PRIVATE regex_core)
 
-# 12) regex_benchmark — 性能基准测试
-add_executable(regex_benchmark tests/test_benchmark.c)
-target_link_libraries(regex_benchmark PRIVATE regex_core)
+# 12) bench_all — 统一性能测试 (替换 posix_benchmark + posix_compare)
+add_executable(bench_all tests/bench_all.c)
+target_link_libraries(bench_all PRIVATE regex_core)
 
 # 13) grep_test_runner — Spencer 测试套件运行器
 add_executable(grep_test_runner tests/grep_test_runner.c)
 target_link_libraries(grep_test_runner PRIVATE regex_core)
 
-# 14) posix_benchmark — DFA 性能对比基准
-add_executable(posix_benchmark tests/posix_benchmark.c)
-target_link_libraries(posix_benchmark PRIVATE regex_core)
-
-# 15) dot_gen — NFA/DFA 转换图 + 状态转移表生成
+# 14) dot_gen — NFA/DFA 转换图 + 状态转移表生成
 add_executable(dot_gen tests/dot_gen.c)
 target_link_libraries(dot_gen PRIVATE regex_core)
 
-# 16) posix_compare — DFA vs 未最小化(POSIX等效) 性能对比
-add_executable(posix_compare tests/posix_compare.c)
-target_link_libraries(posix_compare PRIVATE regex_core)
-
-# 17) posix_system_bench — DFA vs 系统POSIX(PCRE) 性能直接对比
+# 15) posix_system_bench — DFA vs 系统POSIX(PCRE) 性能直接对比
 add_executable(posix_system_bench tests/posix_system_bench.c)
 target_link_libraries(posix_system_bench PRIVATE regex_core)
-# 使用 CMake 变量设置额外的链接目录
 target_link_directories(posix_system_bench PRIVATE ${CMAKE_BINARY_DIR}/bin)
-# 链接系统 PCRE POSIX 库 (libpcreposix-0.dll)
 target_link_libraries(posix_system_bench PRIVATE pcreposix)
 
 # ---------- 安装 ----------
@@ -129,7 +119,7 @@ install(TARGETS regex_core
     ARCHIVE DESTINATION lib
     LIBRARY DESTINATION lib
 )
-install(TARGETS regex_engine regex_tokenizer_test regex_parser_test regex_nfa_test regex_dfa_test regex_hopcroft_test regex_matcher_test regex_capture_test regex_api_test regex_posix_test regex_benchmark
+install(TARGETS regex_engine regex_tokenizer_test regex_parser_test regex_nfa_test regex_dfa_test regex_hopcroft_test regex_matcher_test regex_capture_test regex_api_test regex_posix_test
     RUNTIME DESTINATION bin
 )
 install(DIRECTORY include/
@@ -165,8 +155,8 @@ add_custom_target(run_grep_tests
 
 # 一键运行 DFA 性能基准 (匹配 + 编译管道)
 add_custom_target(run_benchmark
-    COMMAND $<TARGET_FILE:posix_benchmark> all
-    DEPENDS posix_benchmark
+    COMMAND $<TARGET_FILE:bench_all> all
+    DEPENDS bench_all
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     COMMENT "运行 DFA 性能基准..."
 )
@@ -181,18 +171,18 @@ add_custom_target(run_dotgen
 
 # 一键运行 DFA vs POSIX(未最小化等效) 性能对比
 add_custom_target(run_perf_compare
-    COMMAND $<TARGET_FILE:posix_compare>
-    DEPENDS posix_compare
+    COMMAND $<TARGET_FILE:bench_all> compare
+    DEPENDS bench_all
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMENT "运行 DFA vs POSIX 性能对比..."
+    COMMENT "运行 DFA vs POSIX 等效性能对比..."
 )
 
-# 一键运行 DFA vs 回溯NFA 性能直接对比
+# 一键运行 DFA vs 系统 POSIX(PCRE) 性能对比
 add_custom_target(run_posix_cmp
     COMMAND $<TARGET_FILE:posix_system_bench>
     DEPENDS posix_system_bench
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMENT "运行 DFA vs 回溯NFA 性能对比..."
+    COMMENT "运行 DFA vs 系统 POSIX 性能对比..."
 )
 
 # ---------- 信息输出 ----------
