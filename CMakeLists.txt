@@ -109,8 +109,18 @@ add_executable(dot_gen tests/dot_gen.c)
 target_link_libraries(dot_gen PRIVATE regex_core)
 
 # 15) posix_system_bench — DFA vs 系统POSIX(PCRE) 性能直接对比
-add_executable(posix_system_bench tests/posix_system_bench.c)
-target_link_libraries(posix_system_bench PRIVATE regex_core)
+# 注意: 必须独立编译源文件而不能链接 regex_core，否则项目中的
+# posix_compat.c 提供的 regcomp/regexec/regfree 符号会覆盖系统
+# libpcreposix 的同名函数，导致实际调用的是我们的 POSIX 兼容层。
+add_executable(posix_system_bench
+    tests/posix_system_bench.c
+    src/tokenizer.c
+    src/parser.c
+    src/nfa.c
+    src/dfa.c
+    src/hopcroft.c
+)
+target_include_directories(posix_system_bench PRIVATE ${CMAKE_SOURCE_DIR}/include)
 target_link_directories(posix_system_bench PRIVATE ${CMAKE_BINARY_DIR}/bin)
 target_link_libraries(posix_system_bench PRIVATE pcreposix)
 
