@@ -361,7 +361,14 @@ static void test_error_unclosed_paren(void) {
 }
 
 static void test_error_extra_paren(void) {
-    check_parse_fails("a)", "多余右括号 → 解析失败");
+    /* ERE 兼容：孤立的右括号视为普通字符，所以 a) 现在解析成功 */
+    ASTNode *root = do_parse("a)");
+    if (root) {
+        check_pass("多余右括号 → 解析成功（ERE兼容）");
+        ast_free(root);
+    } else {
+        check_fail("多余右括号 → 解析成功（ERE兼容）", "非NULL", "NULL");
+    }
 }
 
 static void test_error_pipe_at_start(void) {

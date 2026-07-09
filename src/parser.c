@@ -134,7 +134,6 @@ static ASTNode *parse_atom(Parser *p) {
         /* ERE 兼容：空括号 () 是合法的（匹配空串） */
         if (peek(p).type == TOK_RPAREN) {
             advance(p);                                 /* 消费 ')' */
-            /* 空匹配：创建一个 epsilon 等价物 — 无子节点的 GROUP */
             ASTNode *group = ast_node_new(AST_GROUP);
             group->pos = tok.pos;
             return group;
@@ -149,15 +148,6 @@ static ASTNode *parse_atom(Parser *p) {
         group->left = inner;
         group->pos = tok.pos;
         return group;
-    }
-
-    /* ---- ERE 兼容：孤立的右括号视为普通字符 ---- */
-    if (tok.type == TOK_RPAREN) {
-        advance(p);
-        ASTNode *node = ast_node_new(AST_CHAR);
-        node->ch = ')';
-        node->pos = tok.pos;
-        return node;
     }
 
     /* ---- 意外的 token ---- */
@@ -253,8 +243,8 @@ static ASTNode *parse_chain(Parser *p) {
         /* 判断下一个 token 是不是因子的开头 */
         int is_atom_start = (t == TOK_CHAR || t == TOK_DOT ||
                              t == TOK_ESCAPE || t == TOK_BRACKET ||
-                             t == TOK_LPAREN || t == TOK_RPAREN ||
-                             t == TOK_CARET || t == TOK_DOLLAR);
+                             t == TOK_LPAREN || t == TOK_CARET ||
+                             t == TOK_DOLLAR);
 
         if (!is_atom_start) break;          /* 不是因子开头 → 连接结束 */
 
