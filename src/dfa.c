@@ -23,7 +23,7 @@
 /*  内部辅助：字符匹配                                                         */
 /* ========================================================================== */
 
-/** 检查单个字符是否匹配 bracket 中的字符集合（支持范围和否定） */
+/** 检查单个字符是否匹配 bracket 中的字符集合（支持范围、否定、POSIX 字符类） */
 static int bracket_matches(const char *bstr, size_t blen, char c) {
     if (!bstr || blen == 0) return 0;
 
@@ -37,6 +37,46 @@ static int bracket_matches(const char *bstr, size_t blen, char c) {
 
     int matched = 0;
     for (; i < blen; i++) {
+        /* ---- POSIX 字符类 [[:xxx:]] ---- */
+        if (i + 4 < blen && bstr[i] == '[' && bstr[i+1] == ':') {
+            size_t end = i + 2;
+            while (end < blen && !(bstr[end] == ':' && end + 1 < blen && bstr[end+1] == ']'))
+                end++;
+            if (end + 1 < blen && bstr[end] == ':' && bstr[end+1] == ']') {
+                /* 提取类名: bstr[i+2 .. end-1] */
+                size_t name_len = end - (i + 2);
+                const char *name = bstr + i + 2;
+
+                int is_match = 0;
+                if      (name_len == 5 && strncmp(name, "alpha", 5) == 0)
+                    is_match = ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'));
+                else if (name_len == 5 && strncmp(name, "digit", 5) == 0)
+                    is_match = (c >= '0' && c <= '9');
+                else if (name_len == 5 && strncmp(name, "lower", 5) == 0)
+                    is_match = (c >= 'a' && c <= 'z');
+                else if (name_len == 5 && strncmp(name, "upper", 5) == 0)
+                    is_match = (c >= 'A' && c <= 'Z');
+                else if (name_len == 6 && strncmp(name, "xdigit", 6) == 0)
+                    is_match = ((c >= '0' && c <= '9') ||
+                                (c >= 'a' && c <= 'f') ||
+                                (c >= 'A' && c <= 'F'));
+                else if (name_len == 5 && strncmp(name, "alnum", 5) == 0)
+                    is_match = ((c >= 'a' && c <= 'z') ||
+                                (c >= 'A' && c <= 'Z') ||
+                                (c >= '0' && c <= '9'));
+                else if (name_len == 5 && strncmp(name, "punct", 5) == 0)
+                    is_match = ((c >= 33 && c <= 47) || (c >= 58 && c <= 64) ||
+                                (c >= 91 && c <= 96) || (c >= 123 && c <= 126));
+                else if (name_len == 5 && strncmp(name, "space", 5) == 0)
+                    is_match = (c == ' ' || c == '\t' || c == '\n' ||
+                                c == '\r' || c == '\f' || c == '\v');
+
+                if (is_match) matched = 1;
+                i = end + 1;  /* 跳过整个 [[:...:]] */
+                continue;
+            }
+        }
+
         if (i + 2 < blen && bstr[i + 1] == '-') {
             /* 范围：例如 a-z, 0-9 */
             if ((unsigned char)c >= (unsigned char)bstr[i] &&

@@ -116,6 +116,10 @@ target_link_libraries(dot_gen PRIVATE regex_core)
 add_executable(posix_compare tests/posix_compare.c)
 target_link_libraries(posix_compare PRIVATE regex_core)
 
+# 17) posix_system_bench — DFA vs 回溯NFA性能对比
+add_executable(posix_system_bench tests/posix_system_bench.c)
+target_link_libraries(posix_system_bench PRIVATE regex_core)
+
 # ---------- 安装 ----------
 install(TARGETS regex_core
     ARCHIVE DESTINATION lib
@@ -177,6 +181,14 @@ add_custom_target(run_perf_compare
     DEPENDS posix_compare
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     COMMENT "运行 DFA vs POSIX 性能对比..."
+)
+
+# 一键运行 DFA vs 回溯NFA 性能直接对比
+add_custom_target(run_posix_cmp
+    COMMAND $<TARGET_FILE:posix_system_bench>
+    DEPENDS posix_system_bench
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMENT "运行 DFA vs 回溯NFA 性能对比..."
 )
 
 # ---------- 信息输出 ----------

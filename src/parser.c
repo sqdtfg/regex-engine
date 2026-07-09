@@ -154,6 +154,15 @@ static ASTNode *parse_atom(Parser *p) {
     }
 
     /* ---- 意外的 token ---- */
+    /* ERE 兼容：孤立的 ')' 视作普通字符 (POSIX BOTCH 语义) */
+    if (tok.type == TOK_RPAREN) {
+        advance(p);
+        ASTNode *node = ast_node_new(AST_CHAR);
+        node->ch = ')';
+        node->pos = tok.pos;
+        return node;
+    }
+
     p->error_code = 1;
     snprintf(p->error_msg, sizeof(p->error_msg),
              "不期望的 token: %s", token_to_string(tok));
