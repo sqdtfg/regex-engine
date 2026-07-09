@@ -1,17 +1,17 @@
 /**
- * dot_gen.c — 生成单文件 HTML 诊断报告
+ * dot_gen.c — 生成单文件 HTML 诊断报告（全中文）
  *
- * 对一组典型正则表达式穿过完整管道，输出一个自包含的 HTML 文件，
- * 包含清晰的网格表格，每个模式展示:
- *   (1) 正则表达式模式
+ * 对典型正则表达式集，输出一个自包含的 HTML 文件，包含：
+ *   (1) 正则表达式模式名
  *   (2) NFA 状态数
  *   (3) DFA 最小化前：状态数 + 状态转移表
  *   (4) DFA 最小化后：状态数 + 状态转移表
+ *   (5) 汇总对比表（所有模式横向对比）
  *
  * 用法（CMake）：
  *   cmake --build . --target run_dotgen
  * 输出：
- *   build/DOT/report.html（可在任意浏览器中打开）
+ *   build/DOT/report.html（浏览器可直接打开）
  */
 
 #include <stdio.h>
@@ -32,7 +32,6 @@
 /*  字符区间标签格式化（紧凑、HTML 安全）                                        */
 /* ========================================================================== */
 
-/** 将单个字符转为 HTML 安全字符串 */
 static int html_escape_char(char *buf, size_t bufsz, int c) {
     switch (c) {
     case '&':  return snprintf(buf, bufsz, "&amp;");
@@ -44,21 +43,11 @@ static int html_escape_char(char *buf, size_t bufsz, int c) {
     }
 }
 
-/**
- * 将字符区间 [lo..hi] 格式化为紧凑标签写入 buf。
- * 返回写入的字节数（不含 NUL）。
- *
- *   - 单个可打印字符 → 'a'
- *   - 单个不可打印字符 → 0x09
- *   - 可打印范围 → a-z
- *   - 不可打印范围 → 0x00-0x1F
- */
 static int format_char_range(char *buf, size_t bufsz, int lo, int hi) {
     if (lo == hi) {
         if (lo >= 32 && lo <= 126) {
             return html_escape_char(buf, bufsz, lo);
         } else {
-            /* 识别常见控制字符，给出助记名 */
             switch (lo) {
             case '\t': return snprintf(buf, bufsz, "\\t");
             case '\n': return snprintf(buf, bufsz, "\\n");
@@ -67,7 +56,6 @@ static int format_char_range(char *buf, size_t bufsz, int lo, int hi) {
             }
         }
     } else {
-        /* 区间 */
         if (lo >= 32 && lo <= 126 && hi >= 32 && hi <= 126) {
             char lo_c, hi_c;
             switch (lo) { case '<': lo_c = 0; break; case '>': lo_c = 0; break;
@@ -80,11 +68,6 @@ static int format_char_range(char *buf, size_t bufsz, int lo, int hi) {
     }
 }
 
-/**
- * 构建紧凑的逗号分隔标签，描述从 DFA 状态转移到 target 的全部字符。
- * 合并连续字符为区间（如 a-z、0-9），减少视觉噪音。
- * 输出已做 HTML 转义。返回 buf 指针以便链式使用。
- */
 static const char *transition_label(const int *trans, int target,
                                      char *buf, size_t bufsz) {
     if (bufsz < 4) return "";
@@ -115,10 +98,9 @@ static const char *transition_label(const int *trans, int target,
 }
 
 /* ========================================================================== */
-/*  HTML 输出辅助                                                               */
+/*  HTML 输出（全中文）                                                         */
 /* ========================================================================== */
 
-/** 输出 HTML 头部（含嵌入式 CSS） */
 static void emit_html_header(FILE *fp) {
     fputs(
 "<!DOCTYPE html>\n"
@@ -126,7 +108,7 @@ static void emit_html_header(FILE *fp) {
 "<head>\n"
 "<meta charset=\"UTF-8\">\n"
 "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
-"<title>Regex Engine &mdash; Compilation Report</title>\n"
+"<title>正则引擎 &mdash; 编译报告</title>\n"
 "<style>\n"
 "  * { box-sizing: border-box; margin: 0; padding: 0; }\n"
 "  body {\n"
@@ -191,7 +173,7 @@ static void emit_html_header(FILE *fp) {
 "    min-width: 125px; text-align: center;\n"
 "  }\n"
 "  .card-num { font-size: 1.4rem; font-weight: 700; color: #2c3e50; }\n"
-"  .card-lbl { font-size: 0.73rem; color: #888; margin-top: 0.12rem; text-transform: uppercase; letter-spacing: 0.04em; }\n"
+"  .card-lbl { font-size: 0.73rem; color: #888; margin-top: 0.12rem; }\n"
 "\n"
 "  /* ---- 模式名 ---- */\n"
 "  code.re {\n"
@@ -208,32 +190,27 @@ static void emit_html_header(FILE *fp) {
 "</style>\n"
 "</head>\n"
 "<body>\n"
-"<h1>&#9881; Regex Engine &mdash; Compilation Report</h1>\n"
+"<h1>&#9881; 正则引擎 &mdash; 编译报告</h1>\n"
 "<p class=\"sub\">"
-"Thompson NFA &rarr; Subset-Construction DFA &rarr; Hopcroft Minimization"
+"Thompson NFA &rarr; 子集构造 DFA &rarr; Hopcroft 最小化"
 "</p>\n"
     , fp);
 }
 
-/** 输出 HTML 尾部 */
 static void emit_html_footer(FILE *fp) {
     fputs("</body>\n</html>\n", fp);
 }
 
-/**
- * 输出汇总对比表（所有模式横向对比）。
- * 在第二趟输出详情之前调用。
- */
 static void emit_summary_table(FILE *fp, int n, const char **pats,
                                 const int *nfa, const int *dfab, const int *dfaa) {
-    fputs("<h2>&#128202; Summary</h2>\n"
+    fputs("<h2>&#128202; 状态压缩汇总</h2>\n"
           "<table class=\"summary\">\n"
           "<thead><tr>"
-          "<th>#</th><th>Pattern</th>"
-          "<th>NFA States</th>"
-          "<th>DFA Before</th>"
-          "<th>DFA After</th>"
-          "<th>Reduction</th>"
+          "<th>编号</th><th>正则表达式</th>"
+          "<th>NFA 状态数</th>"
+          "<th>DFA(最小化前)</th>"
+          "<th>DFA(最小化后)</th>"
+          "<th>压缩比</th>"
           "</tr></thead>\n<tbody>\n", fp);
 
     for (int i = 0; i < n; i++) {
@@ -258,18 +235,11 @@ static void emit_summary_table(FILE *fp, int n, const char **pats,
     fputs("</tbody>\n</table>\n", fp);
 }
 
-/**
- * 输出一个 DFA 的状态转移表（HTML <table>）。
- *
- * 表头：State | Accept | Transitions
- * 每行显示一个状态的所有转移边，标签合并连续字符区间。
- * 转移格式：<b>S3</b> ← a-z,d-g（箭头左侧是目标状态，右侧是触发字符）
- */
 static void emit_dfa_table(FILE *fp, const DFAMachine *dfa) {
     fputs("<table><thead><tr>"
-          "<th class=\"w-st\">State</th>"
-          "<th class=\"w-ac\">Accept</th>"
-          "<th>Transitions</th>"
+          "<th class=\"w-st\">状态</th>"
+          "<th class=\"w-ac\">接受?</th>"
+          "<th>转移</th>"
           "</tr></thead>\n<tbody>\n", fp);
 
     for (int i = 0; i < dfa->state_count; i++) {
@@ -278,9 +248,8 @@ static void emit_dfa_table(FILE *fp, const DFAMachine *dfa) {
         fprintf(fp, "<tr><td class=\"w-st\">S%d</td>", s->id);
         fprintf(fp, "<td class=\"w-ac %s\">%s</td>",
                 s->is_accept ? "ac-y" : "ac-n",
-                s->is_accept ? "\xe2\x9c\x93" : "\xe2\x80\x94");
+                s->is_accept ? "是" : "否");
 
-        /* 按目标状态分组，在每个 (source, target) 对内合并连续字符区间 */
         fputs("<td class=\"tx\">", fp);
 
         int seen[256] = {0};
@@ -296,8 +265,7 @@ static void emit_dfa_table(FILE *fp, const DFAMachine *dfa) {
             if (!first) fputs("<br>", fp);
             first = 0;
 
-            /* 输出格式：<目标> ← <标签>  */
-            fprintf(fp, "<b>S%d</b> &larr; %s", t, label);
+            fprintf(fp, "%s &rarr; <b>S%d</b>", label, t);
         }
 
         if (first) fputs("&mdash;", fp);
@@ -308,13 +276,9 @@ static void emit_dfa_table(FILE *fp, const DFAMachine *dfa) {
 }
 
 /* ========================================================================== */
-/*  单模式处理辅助：解析 → NFA → DFA → 收集计数                                 */
+/*  单模式处理                                                                  */
 /* ========================================================================== */
 
-/**
- * 对单个模式执行完整编译管道并返回统计信息。
- * 返回 0 = 成功，非 0 = 解析失败。
- */
 static int process_pattern(const char *pat, int *nfa_out, int *dfab_out, int *dfaa_out) {
     Parser parser;
     parser_init(&parser, pat);
@@ -349,21 +313,18 @@ int main(int argc, char **argv) {
     SetConsoleCP(CP_UTF8);
 #endif
 
-    /* ---- 输出路径 ---- */
     const char *dir = "DOT";
     if (argc > 1) dir = argv[1];
 
     char out_path[512];
     snprintf(out_path, sizeof(out_path), "%s/report.html", dir);
 
-    /* 确保输出目录存在 */
     {
         char cmd[512];
         snprintf(cmd, sizeof(cmd), "mkdir -p %s 2>/dev/null", dir);
         system(cmd);
     }
 
-    /* ---- 测试模式 ---- */
     const char *patterns[] = {
         "a(b|c)*d",
         "(a|b)*abb",
@@ -379,54 +340,41 @@ int main(int argc, char **argv) {
     int n_pats = 0;
     while (patterns[n_pats]) n_pats++;
 
-    /* ====================================================================== */
-    /*  第一趟：收集汇总统计信息                                                */
-    /* ====================================================================== */
     int nfa_counts[20], dfa_before[20], dfa_after[20];
 
     printf("=== 第一趟：收集统计信息 ===\n");
     for (int i = 0; i < n_pats; i++) {
         int rc = process_pattern(patterns[i],
                                   &nfa_counts[i], &dfa_before[i], &dfa_after[i]);
-        printf("  [%d] %-20s  NFA=%-3d  DFA(before)=%-3d  DFA(after)=%-3d  %s\n",
+        printf("  [%d] %-20s  NFA=%-3d  DFA(前)=%-3d  DFA(后)=%-3d  %s\n",
                i + 1, patterns[i],
                nfa_counts[i], dfa_before[i], dfa_after[i],
-               rc == 0 ? "OK" : "PARSE FAIL");
+               rc == 0 ? "OK" : "解析失败");
     }
 
-    /* ====================================================================== */
-    /*  打开输出文件                                                           */
-    /* ====================================================================== */
     FILE *fp = fopen(out_path, "w");
     if (!fp) {
-        fprintf(stderr, "ERROR: Cannot open %s for writing\n", out_path);
+        fprintf(stderr, "无法写入: %s\n", out_path);
         return 1;
     }
 
     emit_html_header(fp);
-
-    /* 汇总对比表 */
     emit_summary_table(fp, n_pats, patterns,
                        nfa_counts, dfa_before, dfa_after);
 
-    /* ====================================================================== */
-    /*  第二趟：逐模式输出详情                                                 */
-    /* ====================================================================== */
     printf("\n=== 第二趟：输出详情 ===\n");
 
     for (int i = 0; i < n_pats; i++) {
         const char *pat = patterns[i];
 
-        /* 跳过在第一趟解析失败的模式 */
         if (nfa_counts[i] == 0 && dfa_before[i] == 0 && dfa_after[i] == 0) {
             fprintf(fp, "<h2>%s <span style=\"color:#c62828;font-weight:400\">"
-                    "(parse failed)</span></h2>\n", pat);
+                    "(解析失败)</span></h2>\n", pat);
             continue;
         }
 
         printf("  [%d] %s\n", i + 1, pat);
 
-        /* 重建管道以获取 DFA 详情 */
         Parser parser;
         parser_init(&parser, pat);
         ASTNode *ast = parser_parse(&parser);
@@ -437,30 +385,24 @@ int main(int argc, char **argv) {
         int nfa_st = nfa.state_count;
         int dfab_st = dfa.state_count;
 
-        /* ---- 模式标题 ---- */
         fprintf(fp, "<h2>%s</h2>\n", pat);
 
-        /* 状态数统计卡 */
         fprintf(fp,
             "<div class=\"card-row\">"
             "<div class=\"card\"><div class=\"card-num\">%d</div>"
-            "<div class=\"card-lbl\">NFA states</div></div>"
+            "<div class=\"card-lbl\">NFA 状态数</div></div>"
             "<div class=\"card\"><div class=\"card-num\">%d</div>"
-            "<div class=\"card-lbl\">DFA before minimize</div></div>"
+            "<div class=\"card-lbl\">DFA 最小化前状态数</div></div>"
             "<div class=\"card\"><div class=\"card-num\">%d</div>"
-            "<div class=\"card-lbl\">DFA after minimize</div></div>"
+            "<div class=\"card-lbl\">DFA 最小化后状态数</div></div>"
             "</div>\n",
             nfa_st, dfab_st, dfa_after[i]);
 
-        /* ---- DFA 最小化前转移表 ---- */
-        fprintf(fp, "<h3>DFA Before Minimize &mdash; %d state%s</h3>\n",
-                dfab_st, dfab_st == 1 ? "" : "s");
+        fprintf(fp, "<h3>DFA 最小化前 &mdash; %d 个状态</h3>\n", dfab_st);
         emit_dfa_table(fp, &dfa);
 
-        /* ---- DFA 最小化后转移表 ---- */
         dfa_minimize(&dfa);
-        fprintf(fp, "<h3>DFA After Minimize &mdash; %d state%s</h3>\n",
-                dfa_after[i], dfa_after[i] == 1 ? "" : "s");
+        fprintf(fp, "<h3>DFA 最小化后 &mdash; %d 个状态</h3>\n", dfa_after[i]);
         emit_dfa_table(fp, &dfa);
 
         dfa_free(&dfa);
@@ -468,10 +410,9 @@ int main(int argc, char **argv) {
         ast_free(ast);
     }
 
-    /* ---- 尾部 ---- */
     emit_html_footer(fp);
     fclose(fp);
 
-    printf("\nReport written to: %s\n", out_path);
+    printf("\n报告已写入: %s\n", out_path);
     return 0;
 }
