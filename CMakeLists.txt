@@ -126,6 +126,10 @@ target_link_libraries(posix_benchmark PRIVATE regex_core)
 add_executable(dot_gen tests/dot_gen.c)
 target_link_libraries(dot_gen PRIVATE regex_core)
 
+# 16) posix_compare — DFA vs POSIX 性能自动对比
+add_executable(posix_compare tests/posix_compare.c)
+target_link_libraries(posix_compare PRIVATE regex_core)
+
 # ---------- 安装 ----------
 install(TARGETS regex_core
     ARCHIVE DESTINATION lib
@@ -152,7 +156,39 @@ add_custom_target(run_tests
     COMMAND $<TARGET_FILE:regex_posix_test>
     DEPENDS regex_tokenizer_test regex_parser_test regex_nfa_test regex_dfa_test regex_hopcroft_test regex_matcher_test regex_capture_test regex_api_test regex_posix_test
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMENT "Running test suite..."
+    COMMENT "运行全部单元测试..."
+)
+
+# 一键运行 grep Spencer 测试套件 (ERE 222 用例)
+add_custom_target(run_grep_tests
+    COMMAND $<TARGET_FILE:grep_test_runner> ${CMAKE_SOURCE_DIR}/grep/tests/ere.tests ere
+    DEPENDS grep_test_runner
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMENT "运行 grep Spencer ERE 测试套件..."
+)
+
+# 一键运行 DFA 性能基准 (匹配 + 编译管道)
+add_custom_target(run_benchmark
+    COMMAND $<TARGET_FILE:posix_benchmark> all
+    DEPENDS posix_benchmark
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMENT "运行 DFA 性能基准..."
+)
+
+# 一键生成 NFA/DFA DOT 图和状态转移表
+add_custom_target(run_dotgen
+    COMMAND $<TARGET_FILE:dot_gen> ${CMAKE_BINARY_DIR}/DOT
+    DEPENDS dot_gen
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMENT "生成 NFA/DFA 转换图..."
+)
+
+# 一键运行 DFA vs POSIX 性能对比
+add_custom_target(run_perf_compare
+    COMMAND $<TARGET_FILE:posix_compare>
+    DEPENDS posix_compare
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMENT "运行 DFA vs POSIX 性能对比..."
 )
 
 # ---------- 信息输出 ----------
